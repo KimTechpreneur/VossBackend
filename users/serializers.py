@@ -195,6 +195,67 @@ class PasswordResetSerializer(serializers.ModelSerializer):
         fields = ['id', 'user', 'token', 'created_at', 'expires_at', 'is_used']
         read_only_fields = ['id', 'token', 'created_at', 'expires_at', 'is_used']
 
+class TokenVerificationSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+
+    def validate_token(self, value):
+        from django.utils import timezone
+        from .models import PasswordReset
+        
+        try:
+            reset = PasswordReset.objects.get(
+                token=value,
+                expires_at__gt=timezone.now(),
+                is_used=False
+            )
+            self.context['reset'] = reset
+            return value
+        except PasswordReset.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired token.")
+
+class PasswordResetConfirmSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    newPassword = serializers.CharField(required=True, min_length=8)
+
+    def validate_token(self, value):
+        from django.utils import timezone
+        from .models import PasswordReset
+        
+        try:
+            reset = PasswordReset.objects.get(
+                token=value,
+                expires_at__gt=timezone.now(),
+                is_used=False
+            )
+            self.context['reset'] = reset
+            return value
+        except PasswordReset.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired token.")
+
+    def validate_newPassword(self, value):
+        from .utils import validate_password_strength
+        
+        is_valid, error_message = validate_password_strength(value)
+        if not is_valid:
+            raise serializers.ValidationError(error_message)
+        return value
+
+    def save(self):
+        reset = self.context['reset']
+        new_password = self.validated_data['newPassword']
+        
+        # Update user's password
+        user = reset.user
+        user.set_password(new_password)
+        user.force_password_change = False
+        user.save()
+        
+        # Mark token as used
+        reset.is_used = True
+        reset.save()
+        
+        return user
+
 class UserBulkUpdateSerializer(serializers.Serializer):
     user_ids = serializers.ListField(
         child=serializers.UUIDField(),

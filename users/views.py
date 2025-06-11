@@ -13,7 +13,8 @@ from .models import User, Role, Permission, PasswordReset
 from .serializers import (
     UserSerializer, RoleSerializer, PermissionSerializer,
     PasswordResetSerializer, UserBulkUpdateSerializer, UserProfileSerializer,
-    UserCreateSerializer, UserUpdateSerializer
+    UserCreateSerializer, UserUpdateSerializer, TokenVerificationSerializer,
+    PasswordResetConfirmSerializer
 )
 from .permissions import IsAdminUser, IsUnitHead, CanManageUsers, IsOwnerOrAdmin
 from .filters import UserFilter
@@ -352,30 +353,28 @@ class UserViewSet(viewsets.ModelViewSet):
         
         return Response(stats_data)
 
-    @swagger_auto_schema(
-        operation_description="Logout user and blacklist refresh token",
-        request_body=openapi.Schema(
-            type=openapi.TYPE_OBJECT,
-            required=['refresh_token'],
-            properties={
-                'refresh_token': openapi.Schema(type=openapi.TYPE_STRING, description='Refresh token to blacklist')
-            }
-        ),
-        responses={
-            205: "No Content",
-            400: "Bad Request",
-            401: "Unauthorized"
-        }
-    )
     @action(detail=False, methods=['post'])
     def logout(self, request):
         try:
-            refresh_token = request.data["refresh_token"]
+            refresh_token = request.data.get("refresh_token")
+            if not refresh_token:
+                return Response(
+                    {'error': 'refresh_token is required'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
             token = RefreshToken(refresh_token)
             token.blacklist()
-            return Response(status=status.HTTP_205_RESET_CONTENT)
-        except Exception:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'message': 'Successfully logged out'},
+                status=status.HTTP_205_RESET_CONTENT
+            )
+        except Exception as e:
+            print(f"Logout error: {str(e)}")  # For debugging
+            return Response(
+                {'error': 'Invalid token or logout failed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(detail=False, methods=['post'])
     def bulk_deactivate(self, request):
@@ -503,13 +502,13 @@ class PasswordResetViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'])
     def verify(self, request):
-        serializer = self.get_serializer(data=request.data)
+        serializer = TokenVerificationSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         return Response({"detail": "Token is valid."})
     
     @action(detail=False, methods=['post'])
     def confirm(self, request):
-        serializer = self.get_serializer(data=request.data)
+        serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({"detail": "Password has been reset successfully."})

@@ -51,6 +51,7 @@ INSTALLED_APPS = [
     'django_filters',
     'drf_yasg',
     'rest_framework_nested',
+    'rest_framework_simplejwt.token_blacklist',
     
     # Local apps
     'users',
