@@ -33,7 +33,7 @@ class Agent(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     agent_id = models.CharField(max_length=50, unique=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='available')
-    base_office = models.ForeignKey(BaseOffice, on_delete=models.PROTECT, related_name='agents')
+    base_office = models.ForeignKey('offices.Office', on_delete=models.PROTECT, related_name='agents')
     employment_type = models.CharField(max_length=20, choices=EMPLOYMENT_TYPE_CHOICES)
     joined_date = models.DateTimeField(default=timezone.now)
     last_activity = models.DateTimeField(null=True, blank=True)
@@ -42,7 +42,7 @@ class Agent(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return f"{self.user.full_name} ({self.agent_id})"
+        return f"{self.user.first_name} {self.user.last_name} ({self.agent_id})"
 
     @property
     def deliveries_today(self):
@@ -59,6 +59,12 @@ class Agent(models.Model):
             return 0
         successful_deliveries = self.deliveries.filter(status='completed').count()
         return round((successful_deliveries / total_deliveries) * 100)
+
+    def save(self, *args, **kwargs):
+        if not self.agent_id:
+            # Generate agent ID if not provided
+            self.agent_id = f"AGT-{str(uuid.uuid4())[:8].upper()}"
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['agent_id']

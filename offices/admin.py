@@ -1,57 +1,43 @@
 from django.contrib import admin
-from .models import (
-    InternalOffice, OfficeFolder, OfficeTransfer,
-    OfficeStaffMember
-)
+from .models import Office, OfficeFolder, OfficeTransfer
 
-@admin.register(InternalOffice)
-class InternalOfficeAdmin(admin.ModelAdmin):
-    list_display = ('office_name', 'office_type', 'office_code', 'status', 'created_date', 'last_updated_date')
-    list_filter = ('office_type', 'status')
-    search_fields = ('office_name', 'office_code', 'description')
-    readonly_fields = ('created_date', 'last_updated_date')
-    ordering = ('office_name',)
+@admin.register(Office)
+class OfficeAdmin(admin.ModelAdmin):
+    list_display = [
+        'office_name', 'office_code', 'office_type', 
+        'head_of_office', 'staff_count', 'status', 
+        'location', 'created_date'
+    ]
+    list_filter = ['office_type', 'status', 'created_date']
+    search_fields = ['office_name', 'office_code', 'head_of_office__full_name']
+    readonly_fields = ['created_date', 'last_updated_date', 'ongoing_transfers']
     
     fieldsets = (
-        (None, {'fields': ('office_name', 'office_type', 'office_code', 'head_of_office', 'staff_count', 'status', 'location', 'description')}),
-        ('Important dates', {'fields': ('created_date', 'last_updated_date', 'updated_by')}),
+        ('Basic Information', {
+            'fields': ('office_name', 'office_code', 'office_type', 'status')
+        }),
+        ('Management', {
+            'fields': ('head_of_office', 'staff_count')
+        }),
+        ('Details', {
+            'fields': ('location', 'description')
+        }),
+        ('Metadata', {
+            'fields': ('created_date', 'last_updated_date', 'updated_by', 'ongoing_transfers'),
+            'classes': ('collapse',)
+        }),
     )
 
 @admin.register(OfficeFolder)
 class OfficeFolderAdmin(admin.ModelAdmin):
-    list_display = ('folder_id', 'title', 'status', 'date', 'created_at', 'updated_at')
-    list_filter = ('status',)
-    search_fields = ('folder_id', 'title')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('-date',)
-    
-    fieldsets = (
-        (None, {'fields': ('office', 'folder_id', 'title', 'status', 'date', 'initiated_by')}),
-        ('Important dates', {'fields': ('created_at', 'updated_at')}),
-    )
+    list_display = ['folder_id', 'title', 'office', 'status', 'date', 'initiated_by']
+    list_filter = ['status', 'office', 'date']
+    search_fields = ['folder_id', 'title', 'office__office_name']
+    readonly_fields = ['created_at', 'updated_at']
 
 @admin.register(OfficeTransfer)
 class OfficeTransferAdmin(admin.ModelAdmin):
-    list_display = ('transfer_id', 'party', 'status', 'date', 'created_at', 'updated_at')
-    list_filter = ('status',)
-    search_fields = ('transfer_id', 'subject', 'party')
-    readonly_fields = ('created_at', 'updated_at')
-    ordering = ('-date',)
-    
-    fieldsets = (
-        (None, {'fields': ('office', 'transfer_id', 'date', 'party', 'status', 'subject')}),
-        ('Important dates', {'fields': ('created_at', 'updated_at')}),
-    )
-
-@admin.register(OfficeStaffMember)
-class OfficeStaffMemberAdmin(admin.ModelAdmin):
-    list_display = ('user', 'office', 'role', 'status', 'assigned_date', 'updated_at')
-    list_filter = ('status', 'role')
-    search_fields = ('user__email', 'office__office_name')
-    readonly_fields = ('assigned_date', 'updated_at')
-    ordering = ('-assigned_date',)
-    
-    fieldsets = (
-        (None, {'fields': ('office', 'user', 'role', 'status')}),
-        ('Important dates', {'fields': ('assigned_date', 'updated_at')}),
-    )
+    list_display = ['transfer_id', 'subject', 'office', 'party', 'status', 'date']
+    list_filter = ['status', 'office', 'date']
+    search_fields = ['transfer_id', 'subject', 'office__office_name', 'party']
+    readonly_fields = ['created_at', 'updated_at']

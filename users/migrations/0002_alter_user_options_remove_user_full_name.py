@@ -14,8 +14,9 @@ class Migration(migrations.Migration):
             name='user',
             options={'ordering': ['first_name', 'last_name'], 'verbose_name': 'User', 'verbose_name_plural': 'Users'},
         ),
-        migrations.RemoveField(
-            model_name='user',
-            name='full_name',
-        ),
+        # Removed this operation since the full_name field doesn't exist
+        # migrations.RemoveField(
+        #     model_name='user',
+        #     name='full_name',
+        # ),
     ]

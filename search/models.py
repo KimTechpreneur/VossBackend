@@ -29,7 +29,7 @@ class SearchResultItem(models.Model):
         related_name='search_results'
     )
     current_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='search_results'
@@ -53,18 +53,18 @@ class SearchFilters(models.Model):
     date_from = models.DateField(null=True, blank=True)
     date_to = models.DateField(null=True, blank=True)
     destination_unit = models.ForeignKey(
-        'offices.ExternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='search_filters'
+        related_name='destination_search_filters'
     )
     office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='search_filters'
+        related_name='office_search_filters'
     )
     file_type = models.CharField(max_length=50, null=True, blank=True)
     current_status = models.CharField(
@@ -105,7 +105,7 @@ class TransferPathStep(models.Model):
         related_name='transfer_path_steps'
     )
     office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='transfer_path_steps'

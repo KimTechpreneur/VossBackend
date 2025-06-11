@@ -5,9 +5,8 @@ from . import views
 app_name = 'agents'
 
 router = DefaultRouter()
-router.register(r'offices', views.BaseOfficeViewSet)
-router.register(r'agents', views.AgentViewSet)
-router.register(r'agents/(?P<agent_pk>[^/.]+)/deliveries', views.AgentDeliveryViewSet, basename='agent-deliveries')
+router.register(r'offices', views.OfficeViewSet)
+router.register(r'', views.AgentViewSet, basename='agents')
 
 urlpatterns = [
     path('', include(router.urls)),

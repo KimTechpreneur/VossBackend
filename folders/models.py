@@ -96,13 +96,13 @@ class Folder(models.Model):
     category = models.ForeignKey(FolderCategory, on_delete=models.PROTECT, related_name='folders')
     retention_class = models.ForeignKey(RetentionClass, on_delete=models.PROTECT, related_name='folders')
     source_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='source_folders'
     )
     destination_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='destination_folders'
@@ -128,7 +128,7 @@ class Folder(models.Model):
     due_date = models.DateTimeField(null=True, blank=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     current_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='current_folders'
@@ -256,16 +256,16 @@ class FolderTransfer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='folder_transfers')
     from_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
-        related_name='outgoing_transfers'
+        related_name='folder_outgoing_transfers'
     )
     to_office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
-        related_name='incoming_transfers'
+        related_name='folder_incoming_transfers'
     )
     agent = models.ForeignKey(
         'agents.Agent',
@@ -365,7 +365,7 @@ class FolderWorkflowStep(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     folder = models.ForeignKey(Folder, on_delete=models.CASCADE, related_name='workflow_steps')
     office = models.ForeignKey(
-        'offices.InternalOffice',
+        'offices.Office',
         on_delete=models.SET_NULL,
         null=True,
         related_name='workflow_steps'

@@ -13,14 +13,5 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddField(
-            model_name='transfer',
-            name='collected_at',
-            field=models.DateTimeField(null=True),
-        ),
-        migrations.AddField(
-            model_name='transfer',
-            name='collected_by',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
-        ),
+        # Fields already exist in the model, so this migration is now a no-op
     ]
