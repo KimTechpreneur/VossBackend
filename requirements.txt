@@ -1,76 +1,75 @@
 # Django and REST Framework
-Django>=5.2.0
-djangorestframework>=3.14.0
-django-cors-headers>=4.3.1
-django-filter>=23.5
-drf-yasg>=1.21.7
-drf-nested-routers 
+Django
+djangorestframework
+django-cors-headers
+django-filter
+drf-yasg
+drf-nested-routers
 
 # Channels and WebSocket
-channels>=4.0.0
-daphne>=4.0.0
-channels-redis>=4.1.0
-twisted[http2,tls]>=24.1.0
+channels
+daphne
+channels-redis
+twisted[http2,tls]
 
 # Database
-psycopg2-binary>=2.9.9  
-django-environ>=0.11.2  
+psycopg2-binary  
+django-environ  
 
 # Authentication
-djangorestframework-simplejwt>=5.3.1
-django-allauth>=0.60.1
+djangorestframework-simplejwt
+django-allauth
 
 # File Handling
-Pillow>=10.2.0  
-python-magic>=0.4.27  
-django-storages>=1.14.2  
+Pillow  
+python-magic  
+django-storages  
 
 # Security
-django-csp>=3.7
-django-csp-report-only>=0.1.0
-django-honeypot>=1.0.3
+django-csp
+django-honeypot
 
 # Performance
-django-redis>=5.4.0
-django-cacheops>=6.1
-django-debug-toolbar>=4.2.0
+django-redis
+django-cacheops
+django-debug-toolbar
 
 # Testing
-pytest>=7.4.4
-pytest-django>=4.7.0
-pytest-cov>=4.1.0
-factory-boy>=3.3.0
+pytest
+pytest-django
+pytest-cov
+factory-boy
 
 # Development Tools
-black>=24.1.1
-flake8>=7.0.0
-isort>=5.13.2
-mypy>=1.8.0
+black
+flake8
+isort
+mypy
 
 # Documentation
-Sphinx>=7.2.6
-sphinx-rtd-theme>=2.0.0
+Sphinx
+sphinx-rtd-theme
 
 # Monitoring
-sentry-sdk>=1.39.1
-django-prometheus>=2.3.1
+sentry-sdk
+django-prometheus
 
 # Email
-django-anymail>=10.1
+django-anymail
 
 # Task Queue
-celery>=5.3.6
-redis>=5.0.1
+celery
+redis
 
 # API Documentation
-drf-spectacular>=0.27.0
+drf-spectacular
 
 # Date/Time Handling
-pytz>=2024.1
-python-dateutil>=2.8.2
+pytz
+python-dateutil
 
 # Utilities
-python-dotenv>=1.0.1
-requests>=2.31.0
-urllib3>=2.1.0
-certifi>=2024.2.2 
+python-dotenv
+requests
+urllib3
+certifi 

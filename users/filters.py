@@ -5,7 +5,7 @@ class UserFilter(django_filters.FilterSet):
     search = django_filters.CharFilter(method='search_filter')
     role = django_filters.CharFilter(field_name='role__name')
     status = django_filters.CharFilter(field_name='status')
-    department = django_filters.CharFilter(field_name='department__name')
+    department = django_filters.CharFilter(field_name='department')
     date_range_from = django_filters.DateTimeFilter(field_name='last_login', lookup_expr='gte')
     date_range_to = django_filters.DateTimeFilter(field_name='last_login', lookup_expr='lte')
 

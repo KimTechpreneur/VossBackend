@@ -31,8 +31,8 @@ class FolderFileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'folder', 'file', 'original_filename', 'file_type', 
             'file_size', 'formatted_size', 'uploaded_by', 'uploaded_at',
-            'description', 'file_number', 'is_archived', 'archived_at',
-            'archived_by', 'is_selected'
+            'description', 'is_archived', 'archived_at',
+            'archived_by'
         ]
         read_only_fields = ['id', 'uploaded_at', 'archived_at']
 

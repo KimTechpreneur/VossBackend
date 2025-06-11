@@ -24,7 +24,7 @@ from .utils import (
     validate_password_strength
 )
 from django.conf import settings
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 User = get_user_model()
 
@@ -118,8 +118,8 @@ class UserViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     filterset_class = UserFilter
-    search_fields = ['full_name', 'email', 'phone', 'employee_id']
-    ordering_fields = ['full_name', 'email', 'role', 'status', 'department', 'last_login']
+    search_fields = ['first_name', 'last_name', 'email', 'phone', 'employee_id']
+    ordering_fields = ['first_name', 'last_name', 'email', 'role', 'status', 'department', 'last_login']
     ordering = ['-created_at']
     pagination_class = StandardResultsSetPagination
 
@@ -318,16 +318,39 @@ class UserViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK
         )
 
-    @swagger_auto_schema(
-        operation_description="Get a list of all users",
-        responses={
-            200: UserSerializer(many=True),
-            401: "Unauthorized",
-            403: "Forbidden"
+    @action(detail=False, methods=['get'])
+    def stats(self, request):
+        """
+        Returns statistics about users.
+        """
+        total_users = User.objects.count()
+        active_users = User.objects.filter(status='Active').count()
+        inactive_users = User.objects.filter(status='Inactive').count()
+        
+        try:
+            agents = User.objects.filter(role__name='Agent').count()
+        except Exception:
+            agents = 0
+
+        try:
+            unit_heads = User.objects.filter(role__name='Unit Head').count()
+        except Exception:
+            unit_heads = 0
+        
+        # Calculate monthly growth
+        last_month = timezone.now() - timedelta(days=30)
+        monthly_growth = User.objects.filter(created_at__gte=last_month).count()
+
+        stats_data = {
+            'totalUsers': total_users,
+            'activeUsers': active_users,
+            'inactiveUsers': inactive_users,
+            'agents': agents,
+            'unitHeads': unit_heads,
+            'monthlyGrowth': monthly_growth
         }
-    )
-    def list(self, request, *args, **kwargs):
-        return super().list(request, *args, **kwargs)
+        
+        return Response(stats_data)
 
     @swagger_auto_schema(
         operation_description="Logout user and blacklist refresh token",
@@ -413,11 +436,11 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = UserBulkUpdateSerializer(data=request.data)
         if serializer.is_valid():
             user_ids = serializer.validated_data['user_ids']
-            role_id = serializer.validated_data.get('role_id')
+            role = serializer.validated_data.get('role')
             
-            if not role_id:
+            if not role:
                 return Response(
-                    {'error': 'role_id is required'},
+                    {'error': 'role is required'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
@@ -432,9 +455,8 @@ class UserViewSet(viewsets.ModelViewSet):
                     )
             
             users.update(
-                role=role_id,
+                role=role,
                 updated_at=timezone.now(),
-                updated_by=self.request.user
             )
             
             # Log the bulk action
@@ -442,6 +464,24 @@ class UserViewSet(viewsets.ModelViewSet):
             
             return Response({'status': 'roles updated'})
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
+    def bulk_message(self, request):
+        user_ids = request.data.get('user_ids')
+        message = request.data.get('message')
+
+        if not user_ids or not message:
+            return Response(
+                {'error': 'user_ids and message are required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        users = User.objects.filter(id__in=user_ids)
+        # In a real app, this would queue emails to be sent
+        # For now, this is a placeholder
+        print(f"Sending message '{message}' to users: {[user.email for user in users]}")
+            
+        return Response({'status': f'Message sent to {len(user_ids)} users.'})
 
     def log_bulk_action(self, action, user_ids):
         # Implement bulk action logging

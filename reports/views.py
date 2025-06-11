@@ -23,6 +23,14 @@ class ReportViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # Check if this is a schema generation request
+        if getattr(self, 'swagger_fake_view', False):
+            return Report.objects.none()
+            
+        user = self.request.user
+        if user.is_anonymous:
+            return Report.objects.none()
+            
         return Report.objects.filter(created_by=self.request.user)
 
     def perform_create(self, serializer):

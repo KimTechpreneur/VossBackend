@@ -16,7 +16,14 @@ class TicketViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        # Check if this is a schema generation request
+        if getattr(self, 'swagger_fake_view', False):
+            return Ticket.objects.none()
+            
         user = self.request.user
+        if user.is_anonymous:
+            return Ticket.objects.none()
+            
         return Ticket.objects.filter(
             models.Q(created_by=user) | models.Q(assigned_to=user)
         ).distinct()
@@ -66,7 +73,11 @@ class TicketCommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return TicketComment.objects.filter(ticket_id=self.kwargs['ticket_pk'])
+        # Check if this is a schema generation request
+        if getattr(self, 'swagger_fake_view', False):
+            return TicketComment.objects.none()
+            
+        return TicketComment.objects.filter(ticket_id=self.kwargs.get('ticket_pk'))
 
     def perform_create(self, serializer):
         ticket_id = self.kwargs['ticket_pk']

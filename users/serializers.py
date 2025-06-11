@@ -12,15 +12,51 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     permissions = PermissionSerializer(many=True, read_only=True)
+    permission_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        write_only=True,
+        required=False,
+        source='permissions'
+    )
     users_count = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = Role
         fields = [
-            'id', 'name', 'description', 'type', 'status', 'permissions',
+            'id', 'name', 'description', 'type', 'status', 'permissions', 'permission_ids',
             'color', 'is_locked', 'created_at', 'last_modified', 'users_count'
         ]
         read_only_fields = ['id', 'created_at', 'last_modified', 'users_count']
+
+    def create(self, validated_data):
+        permissions_data = validated_data.pop('permissions', [])
+        role = super().create(validated_data)
+        
+        if permissions_data:
+            # Validate that all permission IDs exist
+            permission_objects = Permission.objects.filter(id__in=permissions_data)
+            if len(permission_objects) != len(permissions_data):
+                missing_ids = set(permissions_data) - set(permission_objects.values_list('id', flat=True))
+                raise serializers.ValidationError(f"Invalid permission IDs: {missing_ids}")
+            
+            role.permissions.set(permission_objects)
+        
+        return role
+
+    def update(self, instance, validated_data):
+        permissions_data = validated_data.pop('permissions', None)
+        role = super().update(instance, validated_data)
+        
+        if permissions_data is not None:
+            # Validate that all permission IDs exist
+            permission_objects = Permission.objects.filter(id__in=permissions_data)
+            if len(permission_objects) != len(permissions_data):
+                missing_ids = set(permissions_data) - set(permission_objects.values_list('id', flat=True))
+                raise serializers.ValidationError(f"Invalid permission IDs: {missing_ids}")
+            
+            role.permissions.set(permission_objects)
+        
+        return role
 
 class UserSerializer(serializers.ModelSerializer):
     role = RoleSerializer(read_only=True)
@@ -31,19 +67,18 @@ class UserSerializer(serializers.ModelSerializer):
     )
     initials = serializers.CharField(read_only=True)
     password = serializers.CharField(write_only=True, required=False)
-    full_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'full_name', 'phone', 'role', 'role_id',
+            'id', 'email', 'first_name', 'last_name', 'phone', 'role', 'role_id',
             'status', 'department', 'employee_id', 'office_location',
             'notes', 'last_login', 'force_password_change', 'initials',
             'created_at', 'updated_at', 'password'
         ]
         read_only_fields = [
             'id', 'last_login', 'created_at', 'updated_at',
-            'initials', 'full_name'
+            'initials'
         ]
 
     def create(self, validated_data):
@@ -145,7 +180,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'is_active', 'role', 'phone', 'office_location']
+        fields = ['email', 'first_name', 'last_name', 'is_active', 'role', 'phone', 'office_location', 'status']
         extra_kwargs = {
             'email': {'required': False},
             'first_name': {'required': False},
@@ -165,7 +200,8 @@ class UserBulkUpdateSerializer(serializers.Serializer):
         child=serializers.UUIDField(),
         write_only=True
     )
-    role_id = serializers.PrimaryKeyRelatedField(
+    role = serializers.SlugRelatedField(
+        slug_field='name',
         queryset=Role.objects.all(),
         required=False
     )
@@ -191,25 +227,24 @@ class UserBulkUpdateSerializer(serializers.Serializer):
     )
 
     def validate(self, data):
-        if not any([data.get('role_id'), data.get('status'), data.get('department')]):
+        if not any([data.get('role'), data.get('status'), data.get('department')]):
             raise serializers.ValidationError(
-                "At least one of role_id, status, or department must be provided"
+                "At least one of role, status, or department must be provided"
             )
         return data
 
 class UserProfileSerializer(serializers.ModelSerializer):
     role = RoleSerializer(read_only=True)
     initials = serializers.CharField(read_only=True)
-    full_name = serializers.CharField(read_only=True)
 
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'full_name', 'phone', 'role',
+            'id', 'email', 'first_name', 'last_name', 'phone', 'role',
             'status', 'department', 'employee_id', 'office_location',
             'notes', 'last_login', 'initials', 'created_at', 'updated_at'
         ]
         read_only_fields = [
             'id', 'email', 'role', 'status', 'last_login',
-            'created_at', 'updated_at', 'initials', 'full_name'
+            'created_at', 'updated_at', 'initials'
         ] 
