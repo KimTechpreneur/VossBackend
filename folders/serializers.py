@@ -76,7 +76,10 @@ class FolderFileSerializer(serializers.ModelSerializer):
             'description', 'is_archived', 'archived_at',
             'archived_by'
         ]
-        read_only_fields = ['id', 'uploaded_at', 'archived_at']
+        read_only_fields = [
+            'id', 'uploaded_at', 'archived_at', 'original_filename', 
+            'file_type', 'file_size', 'formatted_size', 'uploaded_by'
+        ]
 
 class FolderSignatureSerializer(serializers.ModelSerializer):
     class Meta:
@@ -124,15 +127,15 @@ class FolderTransferSerializer(serializers.ModelSerializer):
         ]
 
 class FolderSerializer(serializers.ModelSerializer):
-    service_name = serializers.CharField(source='service.name', read_only=True)
-    category_name = serializers.CharField(source='category.name', read_only=True)
-    retention_class_name = serializers.CharField(source='retention_class.name', read_only=True)
-    source_office_name = serializers.CharField(source='source_office.office_name', read_only=True)
-    destination_office_name = serializers.CharField(source='destination_office.office_name', read_only=True)
-    current_office_name = serializers.CharField(source='current_office.office_name', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
-    last_modified_by_name = serializers.CharField(source='last_modified_by.full_name', read_only=True)
-    assigned_agent_name = serializers.CharField(source='assigned_agent.full_name', read_only=True)
+    service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
+    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
+    retention_class_name = serializers.CharField(source='retention_class.name', read_only=True, allow_null=True)
+    source_office_name = serializers.CharField(source='source_office.name', read_only=True, allow_null=True)
+    destination_office_name = serializers.CharField(source='destination_office.name', read_only=True, allow_null=True)
+    current_office_name = serializers.CharField(source='current_office.name', read_only=True, allow_null=True)
+    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, allow_null=True)
+    last_modified_by_name = serializers.CharField(source='last_modified_by.get_full_name', read_only=True, allow_null=True)
+    assigned_agent_name = serializers.CharField(source='assigned_agent.get_full_name', read_only=True, allow_null=True)
     is_overdue = serializers.BooleanField(read_only=True)
     file_count = serializers.IntegerField(read_only=True)
     current_location = serializers.CharField(read_only=True)
@@ -152,7 +155,7 @@ class FolderSerializer(serializers.ModelSerializer):
             'auto_generate_file_numbers', 'tags', 'notifications', 'is_overdue',
             'file_count', 'current_location', 'status_flags'
         ]
-        read_only_fields = ['id', 'created_at', 'updated_at', 'completed_at']
+        read_only_fields = ['id', 'folder_id', 'created_at', 'updated_at', 'completed_at']
 
 class FolderBulkUpdateSerializer(serializers.Serializer):
     folder_ids = serializers.ListField(
@@ -160,11 +163,11 @@ class FolderBulkUpdateSerializer(serializers.Serializer):
         write_only=True
     )
     status = serializers.ChoiceField(
-        choices=Folder.STATUS_CHOICES,
+        choices=Folder.Status.choices,
         required=False
     )
     priority = serializers.ChoiceField(
-        choices=Folder.PRIORITY_CHOICES,
+        choices=Folder.Priority.choices,
         required=False
     )
     assigned_agent = serializers.PrimaryKeyRelatedField(

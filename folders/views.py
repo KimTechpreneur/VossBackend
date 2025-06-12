@@ -15,7 +15,7 @@ from .serializers import (
     FolderSerializer, FolderFileSerializer, FolderTransferSerializer,
     FolderServiceSerializer, FolderCategorySerializer, RetentionClassSerializer,
     FolderSignatureSerializer, FolderWorkflowStepSerializer, FolderCommentSerializer,
-    FolderBulkUpdateSerializer
+    FolderBulkUpdateSerializer, FolderDetailSerializer
 )
 from users.permissions import IsAdminUser, IsOwnerOrAdmin
 from channels.layers import get_channel_layer
@@ -129,6 +129,15 @@ class FolderFileViewSet(viewsets.ModelViewSet):
     queryset = FolderFile.objects.all()
     serializer_class = FolderFileSerializer
     permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        uploaded_file = self.request.data.get('file')
+        serializer.save(
+            uploaded_by=self.request.user,
+            original_filename=uploaded_file.name,
+            file_type=uploaded_file.content_type,
+            file_size=uploaded_file.size
+        )
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -391,6 +400,31 @@ class FolderViewSet(viewsets.ModelViewSet):
     serializer_class = FolderSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_queryset(self):
+        """
+        Optimized queryset for folders, pre-fetching related data
+        and applying filters from query parameters.
+        """
+        queryset = Folder.objects.select_related(
+            'service', 'category', 'retention_class', 
+            'source_office', 'destination_office', 'current_office', 
+            'created_by', 'last_modified_by', 'assigned_agent'
+        ).all()
+
+        # Filtering logic
+        status = self.request.query_params.get('status', None)
+        priority = self.request.query_params.get('priority', None)
+        search = self.request.query_params.get('search', None)
+
+        if status:
+            queryset = queryset.filter(status=status)
+        if priority:
+            queryset = queryset.filter(priority=priority)
+        if search:
+            queryset = queryset.filter(subject__icontains=search)
+
+        return queryset.order_by('-created_at')
+
     def get_permissions(self):
         if self.action in ['destroy', 'bulk_update']:
             return [IsAdminUser()]
@@ -398,56 +432,38 @@ class FolderViewSet(viewsets.ModelViewSet):
             return [IsOwnerOrAdmin()]
         return [IsAuthenticated()]
 
-    def get_queryset(self):
-        queryset = super().get_queryset()
-        status = self.request.query_params.get('status', None)
-        priority = self.request.query_params.get('priority', None)
-        service = self.request.query_params.get('service', None)
-        category = self.request.query_params.get('category', None)
-        source_office = self.request.query_params.get('source_office', None)
-        destination_office = self.request.query_params.get('destination_office', None)
-        assigned_agent = self.request.query_params.get('assigned_agent', None)
-        
-        if status:
-            queryset = queryset.filter(status=status)
-        if priority:
-            queryset = queryset.filter(priority=priority)
-        if service:
-            queryset = queryset.filter(service_id=service)
-        if category:
-            queryset = queryset.filter(category_id=category)
-        if source_office:
-            queryset = queryset.filter(source_office_id=source_office)
-        if destination_office:
-            queryset = queryset.filter(destination_office_id=destination_office)
-        if assigned_agent:
-            queryset = queryset.filter(assigned_agent_id=assigned_agent)
-            
-        return queryset.select_related(
-            'service', 'category', 'retention_class',
-            'source_office', 'destination_office', 'current_office',
-            'assigned_agent', 'assigned_to'
-        )
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return FolderDetailSerializer
+        return FolderSerializer
 
-    @swagger_auto_schema(
-        operation_description="Bulk update multiple folders",
-        request_body=FolderSerializer(many=True),
-        responses={
-            200: FolderSerializer(many=True),
-            400: "Bad Request",
-            401: "Unauthorized",
-            403: "Forbidden"
-        }
-    )
     @action(detail=False, methods=['post'])
     def bulk_update(self, request):
-        serializer = self.get_serializer(data=request.data, many=True)
+        """
+        Handles bulk updates for folders.
+        """
+        serializer = FolderBulkUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         self.perform_bulk_update(serializer)
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     def perform_bulk_update(self, serializer):
-        serializer.save()
+        folder_ids = serializer.validated_data.get('folder_ids')
+        update_data = {
+            'status': serializer.validated_data.get('status'),
+            'priority': serializer.validated_data.get('priority'),
+            'service_id': serializer.validated_data.get('service_id'),
+            'category_id': serializer.validated_data.get('category_id'),
+            'source_office_id': serializer.validated_data.get('source_office_id'),
+            'destination_office_id': serializer.validated_data.get('destination_office_id'),
+            'assigned_agent_id': serializer.validated_data.get('assigned_agent_id'),
+            'last_modified_by_id': self.request.user.id
+        }
+        for folder_id in folder_ids:
+            folder = get_object_or_404(Folder, id=folder_id)
+            for key, value in update_data.items():
+                setattr(folder, key, value)
+            folder.save()
 
     @swagger_auto_schema(
         operation_description="Mark a folder as completed",

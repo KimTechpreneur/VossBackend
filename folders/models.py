@@ -3,6 +3,8 @@ from django.conf import settings
 from django.utils import timezone
 import uuid
 import os
+from django.utils.translation import gettext_lazy as _
+from units.models import Unit
 
 class FolderService(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -10,12 +12,21 @@ class FolderService(models.Model):
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+    is_archived = models.BooleanField(default=False)
+    archived_at = models.DateTimeField(null=True, blank=True)
+    archived_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='archived_files')
 
     def __str__(self):
-        return self.name
+        return f"{self.name} - {self.description[:30]}"
 
     class Meta:
         ordering = ['name']
+
+    def save(self, *args, **kwargs):
+        if not self.folder_id:
+            # Generate a unique folder_id, e.g., using a timestamp and a short UUID
+            self.folder_id = f'FLD-{timezone.now().strftime("%Y%m%d")}-{str(uuid.uuid4())[:4].upper()}'
+        super().save(*args, **kwargs)
 
 class FolderCategory(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -53,31 +64,47 @@ class RetentionClass(models.Model):
         verbose_name_plural = 'Retention Classes'
 
 class Folder(models.Model):
-    STATUS_CHOICES = (
-        ('Not Started', 'Not Started'),
-        ('In Transit', 'In Transit'),
-        ('Delivered', 'Delivered'),
-        ('Overdue', 'Overdue'),
-        ('Pending', 'Pending'),
-        ('Cancelled', 'Cancelled'),
-    )
-    
-    PRIORITY_CHOICES = (
-        ('urgent', 'Urgent'),
-        ('normal', 'Normal'),
-        ('low', 'Low'),
-        ('confidential', 'Confidential'),
-    )
+    class Status(models.TextChoices):
+        DRAFT = 'DRAFT', _('Draft')
+        NOT_STARTED = 'Not Started', _('Not Started')
+        IN_TRANSIT = 'In Transit', _('In Transit')
+        DELIVERED = 'DELIVERED', _('Delivered')
+        OVERDUE = 'Overdue', _('Overdue')
+        PENDING = 'Pending', _('Pending')
+        CANCELLED = 'Cancelled', _('Cancelled')
+        ARCHIVED = 'ARCHIVED', _('Archived')
+
+    class Priority(models.TextChoices):
+        LOW = 'LOW', _('Low')
+        NORMAL = 'normal', _('Normal')
+        URGENT = 'URGENT', _('Urgent')
+        CONFIDENTIAL = 'confidential', _('Confidential')
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    folder_id = models.CharField(max_length=50, unique=True)  # e.g., VOSS-2023-0047
+    folder_id = models.CharField(max_length=255, unique=True, blank=True)
     title = models.CharField(max_length=255)
-    subject = models.CharField(max_length=255)
-    description = models.TextField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Not Started')
-    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
-    service = models.ForeignKey(FolderService, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
-    category = models.ForeignKey(FolderCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
+    subject = models.CharField(max_length=255, db_index=True)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.DRAFT,
+        db_index=True
+    )
+    priority = models.CharField(
+        max_length=20,
+        choices=Priority.choices,
+        default=Priority.NORMAL,
+        db_index=True
+    )
+    service = models.ForeignKey(
+        Unit,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='folders',
+        verbose_name=_("Unit of Origin")
+    )
+    category = models.ForeignKey(FolderCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders', db_index=True)
     retention_class = models.ForeignKey(RetentionClass, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
     source_office = models.ForeignKey(
         'offices.Office',
@@ -138,7 +165,7 @@ class Folder(models.Model):
 
     @property
     def is_overdue(self):
-        if self.due_date and self.status not in ['Delivered', 'Cancelled']:
+        if self.due_date and self.status not in ['DELIVERED', 'CANCELLED']:
             return timezone.now() > self.due_date
         return False
 
@@ -148,16 +175,26 @@ class Folder(models.Model):
 
     @property
     def current_location(self):
-        return self.current_office.office_name if self.current_office else 'Unknown'
+        return self.source_office.name if self.source_office else "N/A"
 
     @property
     def status_flags(self):
         return {
-            'inTransit': self.status == 'In Transit',
+            'inTransit': self.status == 'IN_TRANSIT',
             'overdue': self.is_overdue,
             'requiresSignature': self.requires_signature,
             'isSigned': self.is_signed
         }
+
+    def get_current_location(self):
+        """Returns the name of the current office holding the folder."""
+        return self.source_office.name if self.source_office else "N/A"
+
+    def save(self, *args, **kwargs):
+        if not self.folder_id:
+            # Generate a unique folder_id, e.g., using a timestamp and a short UUID
+            self.folder_id = f'FLD-{timezone.now().strftime("%Y%m%d")}-{str(uuid.uuid4())[:4].upper()}'
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ['-created_at']
@@ -293,7 +330,7 @@ class FolderTransfer(models.Model):
     agent_notes = models.TextField(null=True, blank=True)
     priority = models.CharField(
         max_length=20,
-        choices=Folder.PRIORITY_CHOICES,
+        choices=Folder.Priority.choices,
         default='normal'
     )
     tags = models.JSONField(default=list, blank=True)
