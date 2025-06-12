@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
 import uuid
+from .utils import generate_voss_id
 
 class CustomUserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
@@ -100,7 +101,7 @@ class User(AbstractUser):
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='users', null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
     department = models.CharField(max_length=50, choices=DEPARTMENT_CHOICES)
-    employee_id = models.CharField(max_length=50, null=True, blank=True)
+    voss_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     office_location = models.CharField(max_length=100, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
     last_login = models.DateTimeField(null=True, blank=True)
@@ -142,6 +143,8 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if not self.username:
             self.username = self.email
+        if not self.pk and not self.voss_id:  # Only generate for new users
+            self.voss_id = generate_voss_id()
         super().save(*args, **kwargs)
 
     class Meta:

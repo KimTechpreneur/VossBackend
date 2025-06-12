@@ -5,6 +5,7 @@ from django.conf import settings
 from datetime import timedelta
 import secrets
 import string
+import random
 
 def generate_secure_password(length=12):
     """Generate a secure random password."""
@@ -60,6 +61,17 @@ def send_user_invitation_email(user, setup_url, temporary_password):
         recipient_list=[user.email],
         html_message=html_message
     )
+
+def generate_voss_id():
+    """
+    Generates a unique VOSS ID in the format VOSSXXXXXX.
+    """
+    from .models import User  # Local import to prevent circular dependency
+    while True:
+        random_part = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+        voss_id = f'VOSS{random_part}'
+        if not User.objects.filter(voss_id=voss_id).exists():
+            return voss_id
 
 def validate_password_strength(password):
     """

@@ -72,7 +72,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'phone', 'role', 'role_id',
-            'status', 'department', 'employee_id', 'office_location',
+            'status', 'department', 'voss_id', 'office_location',
             'notes', 'last_login', 'force_password_change', 'initials',
             'created_at', 'updated_at', 'password'
         ]
@@ -302,7 +302,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'phone', 'role',
-            'status', 'department', 'employee_id', 'office_location',
+            'status', 'department', 'voss_id', 'office_location',
             'notes', 'last_login', 'initials', 'created_at', 'updated_at'
         ]
         read_only_fields = [
