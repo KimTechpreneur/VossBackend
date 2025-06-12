@@ -118,13 +118,16 @@ class CreateTransferSerializer(serializers.ModelSerializer):
     existing_folder_id = serializers.CharField(write_only=True, required=False)
     routing_steps = serializers.ListField(write_only=True)
     attached_file_ids = serializers.ListField(write_only=True, required=False)
+    source_office_id = serializers.CharField(write_only=True)
+    destination_office_id = serializers.CharField(write_only=True)
 
     class Meta:
         model = Transfer
         fields = [
             'folder_option', 'folder_data', 'existing_folder_id',
             'attached_file_ids', 'routing_steps', 'delivery_method',
-            'agent', 'agent_notes', 'priority', 'tags', 'notifications'
+            'agent', 'agent_notes', 'priority', 'tags', 'notifications',
+            'source_office_id', 'destination_office_id'
         ]
 
     def validate(self, data):
@@ -157,6 +160,8 @@ class CreateTransferSerializer(serializers.ModelSerializer):
         existing_folder_id = validated_data.pop('existing_folder_id', None)
         routing_steps_data = validated_data.pop('routing_steps', [])
         attached_file_ids = validated_data.pop('attached_file_ids', [])
+        source_office_id = validated_data.pop('source_office_id')
+        destination_office_id = validated_data.pop('destination_office_id')
 
         if folder_option == 'create':
             from folders.serializers import FolderSerializer
@@ -171,6 +176,8 @@ class CreateTransferSerializer(serializers.ModelSerializer):
         transfer = Transfer.objects.create(
             folder=folder,
             created_by=self.context['request'].user,
+            source_office_id=source_office_id,
+            destination_office_id=destination_office_id,
             **validated_data
         )
 
@@ -183,8 +190,22 @@ class CreateTransferSerializer(serializers.ModelSerializer):
 
         # Handle attached files
         if attached_file_ids:
-            # Link files to transfer (implementation depends on your file model)
-            pass
+            from folders.models import FolderFile
+            # This logic assumes attached_file_ids refer to a temporary file store
+            # and that we can retrieve file metadata from there.
+            # This part needs to be adapted to the actual file handling implementation.
+            for file_id in attached_file_ids:
+                # Placeholder for getting file data from a temporary storage
+                # file_obj = TemporaryFile.objects.get(id=file_id)
+                FolderFile.objects.create(
+                    folder=folder,
+                    # file=file_obj.file,
+                    # original_filename=file_obj.filename,
+                    # file_size=file_obj.size,
+                    # file_type=file_obj.content_type,
+                    uploaded_by=self.context['request'].user
+                )
+                # file_obj.delete() # Clean up temporary file
 
         return transfer
 
