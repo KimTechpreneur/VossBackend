@@ -11,6 +11,12 @@ class Unit(models.Model):
         ('health_services', 'Health Services'),
         ('finance_division', 'Finance Division'),
         ('audit_unit', 'Audit Unit'),
+        ('library', 'Library'),
+        ('student_affairs', 'Student Affairs'),
+        ('human_resources', 'Human Resources'),
+        ('it_services', 'IT Services'),
+        ('security', 'Security'),
+        ('maintenance', 'Maintenance'),
         ('other', 'Other'),
     )
 

@@ -15,7 +15,7 @@ from .models import Agent, AgentDelivery
 from offices.models import Office
 from .serializers import (
     AgentSerializer, AgentListSerializer, AgentDeliverySerializer,
-    AgentDeliveryListSerializer, AgentBulkUpdateSerializer, OfficeSerializer,
+    AgentDeliveryListSerializer, AgentBulkUpdateSerializer,
     AgentCreateSerializer, HybridAgentListSerializer, AgentUpgradeSerializer
 )
 from rest_framework.permissions import IsAuthenticated
@@ -23,13 +23,6 @@ from users.permissions import IsAdminUser, IsOwnerOrAdmin, IsAgentManager
 from users.models import User, Role
 
 # Create your views here.
-
-class OfficeViewSet(viewsets.ModelViewSet):
-    queryset = Office.objects.filter(status='Active')
-    serializer_class = OfficeSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]
-    filter_backends = [filters.SearchFilter]
-    search_fields = ['office_name']
 
 class AgentDeliveryViewSet(viewsets.ModelViewSet):
     """

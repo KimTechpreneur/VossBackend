@@ -5,43 +5,27 @@ import uuid
 import os
 
 class FolderService(models.Model):
-    SERVICE_CHOICES = (
-        ('Finance Department', 'Finance Department'),
-        ('Admissions Office', 'Admissions Office'),
-        ('Registrar', 'Registrar'),
-        ('Human Resources', 'Human Resources'),
-        ('Academic Affairs', 'Academic Affairs'),
-        ('Student Services', 'Student Services'),
-    )
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=100, choices=SERVICE_CHOICES, unique=True)
+    name = models.CharField(max_length=100, unique=True)
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.get_name_display()
+        return self.name
 
     class Meta:
         ordering = ['name']
 
 class FolderCategory(models.Model):
-    CATEGORY_CHOICES = (
-        ('confidential', 'Confidential'),
-        ('official', 'Official'),
-        ('academic', 'Academic'),
-        ('other', 'Other'),
-    )
-
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=50, choices=CATEGORY_CHOICES, unique=True)
+    name = models.CharField(max_length=50, unique=True)
     description = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     def __str__(self):
-        return self.get_name_display()
+        return self.name
 
     class Meta:
         ordering = ['name']
@@ -92,9 +76,9 @@ class Folder(models.Model):
     description = models.TextField(null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Not Started')
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='normal')
-    service = models.ForeignKey(FolderService, on_delete=models.PROTECT, related_name='folders')
-    category = models.ForeignKey(FolderCategory, on_delete=models.PROTECT, related_name='folders')
-    retention_class = models.ForeignKey(RetentionClass, on_delete=models.PROTECT, related_name='folders')
+    service = models.ForeignKey(FolderService, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
+    category = models.ForeignKey(FolderCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
+    retention_class = models.ForeignKey(RetentionClass, on_delete=models.SET_NULL, null=True, blank=True, related_name='folders')
     source_office = models.ForeignKey(
         'offices.Office',
         on_delete=models.SET_NULL,

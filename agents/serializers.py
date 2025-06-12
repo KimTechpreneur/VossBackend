@@ -4,11 +4,6 @@ from offices.models import Office
 from users.serializers import UserSerializer
 from users.models import User, Role
 
-class OfficeSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Office
-        fields = ['id', 'office_name']
-
 class AgentDeliverySerializer(serializers.ModelSerializer):
     class Meta:
         model = AgentDelivery

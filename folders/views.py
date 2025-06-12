@@ -24,27 +24,15 @@ from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 
-class FolderServiceViewSet(viewsets.ModelViewSet):
+class FolderServiceViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    API endpoint for managing folder services.
+    API endpoint for viewing folder services.
     
     list:
     Return a list of all folder services.
     
-    create:
-    Create a new folder service.
-    
     retrieve:
     Return the details of a specific folder service.
-    
-    update:
-    Update all fields of a specific folder service.
-    
-    partial_update:
-    Update one or more fields of a specific folder service.
-    
-    destroy:
-    Delete a specific folder service.
     """
     queryset = FolderService.objects.all()
     serializer_class = FolderServiceSerializer
@@ -76,6 +64,13 @@ class FolderCategoryViewSet(viewsets.ModelViewSet):
     serializer_class = FolderCategorySerializer
     permission_classes = [IsAuthenticated]
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
 class RetentionClassViewSet(viewsets.ModelViewSet):
     """
     API endpoint for managing retention classes.
@@ -101,6 +96,13 @@ class RetentionClassViewSet(viewsets.ModelViewSet):
     queryset = RetentionClass.objects.all()
     serializer_class = RetentionClassSerializer
     permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
 
 class FolderFileViewSet(viewsets.ModelViewSet):
     """

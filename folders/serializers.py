@@ -1,9 +1,28 @@
-from rest_framework import serializers
+from rest_framework import serializers, fields
 from .models import (
     Folder, FolderFile, FolderTransfer, FolderService,
     FolderCategory, RetentionClass, FolderSignature,
     FolderWorkflowStep, FolderComment
 )
+from isodate import parse_duration, duration_isoformat
+from datetime import timedelta
+
+class CustomDurationField(fields.Field):
+    """
+    A custom field to handle ISO 8601 duration strings and 'PERMANENT'.
+    """
+    def to_representation(self, value):
+        if value == timedelta(days=36500):  # Magic number for permanent
+            return 'PERMANENT'
+        return duration_isoformat(value)
+
+    def to_internal_value(self, data):
+        if str(data).upper() == 'PERMANENT':
+            return timedelta(days=36500)
+        try:
+            return parse_duration(data)
+        except Exception:
+            raise serializers.ValidationError("Invalid duration format. Use ISO 8601 (e.g., 'P1Y') or 'PERMANENT'.")
 
 class FolderServiceSerializer(serializers.ModelSerializer):
     class Meta:
@@ -18,10 +37,33 @@ class FolderCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 class RetentionClassSerializer(serializers.ModelSerializer):
+    retention_period = CustomDurationField()
+
     class Meta:
         model = RetentionClass
         fields = ['id', 'name', 'description', 'retention_period', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def create(self, validated_data):
+        retention_period_str = validated_data.pop('retention_period')
+        if retention_period_str.upper() == 'PERMANENT':
+            # Handle "permanent" as a very long time, or a special state
+            # For simplicity, let's set it to 9999 days
+            validated_data['retention_period'] = '9999-01-01'
+        else:
+            validated_data['retention_period'] = parse_duration(retention_period_str)
+        
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        retention_period_str = validated_data.pop('retention_period', None)
+        if retention_period_str:
+            if retention_period_str.upper() == 'PERMANENT':
+                validated_data['retention_period'] = '9999-01-01'
+            else:
+                instance.retention_period = parse_duration(retention_period_str)
+
+        return super().update(instance, validated_data)
 
 class FolderFileSerializer(serializers.ModelSerializer):
     formatted_size = serializers.CharField(read_only=True)

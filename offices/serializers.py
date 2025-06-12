@@ -14,6 +14,7 @@ class OfficeSerializer(serializers.ModelSerializer):
             'updated_by', 'ongoing_transfers'
         ]
         read_only_fields = ['id', 'created_date', 'last_updated_date', 'ongoing_transfers']
+        ref_name = "Office"
 
 class OfficeDetailSerializer(serializers.ModelSerializer):
     head_of_office = UserSerializer(read_only=True)
@@ -29,6 +30,7 @@ class OfficeDetailSerializer(serializers.ModelSerializer):
             'updated_by', 'ongoing_transfers'
         ]
         read_only_fields = ['id', 'created_date', 'last_updated_date', 'ongoing_transfers']
+        ref_name = "OfficeDetail"
 
 class OfficeFolderSerializer(serializers.ModelSerializer):
     class Meta:
