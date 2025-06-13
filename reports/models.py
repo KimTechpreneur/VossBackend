@@ -30,7 +30,7 @@ class Report(models.Model):
         ('failed', _('Failed')),
     ]
 
-    template = models.ForeignKey(ReportTemplate, on_delete=models.CASCADE, related_name='reports')
+    template = models.ForeignKey(ReportTemplate, on_delete=models.CASCADE, related_name='reports', null=True, blank=True)
     name = models.CharField(max_length=255)
     parameters = models.JSONField(default=dict, help_text=_("Report parameters"))
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')

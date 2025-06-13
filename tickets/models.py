@@ -4,6 +4,18 @@ from django.utils.translation import gettext_lazy as _
 
 User = get_user_model()
 
+class TicketCategory(models.Model):
+    """Category for a ticket"""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        verbose_name_plural = "Ticket Categories"
+        ordering = ['name']
+
+    def __str__(self):
+        return self.name
+
 class Ticket(models.Model):
     """Support ticket model"""
     PRIORITY_CHOICES = [
@@ -30,7 +42,7 @@ class Ticket(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     resolved_at = models.DateTimeField(null=True, blank=True)
-    category = models.CharField(max_length=100, blank=True)
+    category = models.ForeignKey(TicketCategory, on_delete=models.SET_NULL, null=True, blank=True, related_name='tickets')
     tags = models.JSONField(default=list, blank=True)
     attachments = models.JSONField(default=list, blank=True)
 

@@ -17,7 +17,9 @@ class ReportSerializer(serializers.ModelSerializer):
     template_id = serializers.PrimaryKeyRelatedField(
         queryset=ReportTemplate.objects.filter(is_active=True),
         source='template',
-        write_only=True
+        write_only=True,
+        required=False,
+        allow_null=True
     )
     created_by = serializers.StringRelatedField(read_only=True)
     status_display = serializers.CharField(source='get_status_display', read_only=True)

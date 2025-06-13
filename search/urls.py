@@ -7,7 +7,8 @@ from .views import (
     SearchFiltersViewSet,
     SearchResultItemViewSet,
     SearchHistoryViewSet,
-    SearchResultViewSet
+    SearchResultViewSet,
+    SearchFilterOptionsView
 )
 
 router = DefaultRouter()
@@ -20,5 +21,6 @@ router.register(r'history', SearchHistoryViewSet, basename='search-history')
 router.register(r'search-results', SearchResultViewSet, basename='search-result')
 
 urlpatterns = [
+    path('filter-options/', SearchFilterOptionsView.as_view(), name='search-filter-options'),
     path('', include(router.urls)),
 ] 

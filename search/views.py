@@ -6,6 +6,10 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
+from rest_framework.views import APIView
+from units.models import Unit
+from agents.models import Agent
+from folders.models import FolderFile, Folder
 from .models import (
     SearchResultItem, SearchFilters, TransferPathStep,
     AgentActivity, TransferTrail, SearchHistory, SearchResult
@@ -18,8 +22,37 @@ from .serializers import (
 )
 from rest_framework.permissions import IsAuthenticated
 from users.permissions import IsAdminUser, IsOwnerOrAdmin
+from django.db.models import Q
 
 # Create your views here.
+
+class SearchFilterOptionsView(APIView):
+    """
+    Provides the options for the search filters.
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        # Get file types from actual files
+        file_types = FolderFile.objects.values_list('file_type', flat=True).distinct()
+        # Get statuses from actual folders
+        statuses = Folder.objects.values_list('status', flat=True).distinct()
+        
+        file_type_options = [{'value': ft, 'label': ft.capitalize()} for ft in file_types if ft]
+        status_options = [{'value': s, 'label': s.replace('_', ' ').title()} for s in statuses if s]
+        
+        # Get all active units
+        destination_units = Unit.objects.filter(status='active')
+        # Get all agents (not just available ones)
+        agents = Agent.objects.all()
+
+        data = {
+            'destinationUnits': [{'value': str(unit.id), 'label': unit.name} for unit in destination_units],
+            'fileTypes': file_type_options,
+            'statuses': status_options,
+            'agents': [{'value': str(agent.id), 'label': str(agent)} for agent in agents]
+        }
+        return Response(data)
 
 class TransferPathStepViewSet(viewsets.ModelViewSet):
     """
@@ -162,7 +195,7 @@ class SearchFiltersViewSet(viewsets.ModelViewSet):
     """
     queryset = SearchFilters.objects.all()
     serializer_class = SearchFiltersSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [permissions.AllowAny]
 
     def get_queryset(self):
         return self.queryset.order_by('-created_at')
@@ -192,6 +225,11 @@ class SearchResultItemViewSet(viewsets.ModelViewSet):
     queryset = SearchResultItem.objects.all()
     serializer_class = SearchResultItemSerializer
     permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        if self.action == 'search':
+            return [permissions.AllowAny()]
+        return super().get_permissions()
 
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -232,7 +270,7 @@ class SearchResultItemViewSet(viewsets.ModelViewSet):
     @swagger_auto_schema(
         operation_description="Search for items based on various filters",
         responses={
-            200: SearchResultItemSerializer(many=True),
+            200: "List of search results",
             400: "Bad Request",
             401: "Unauthorized"
         }
@@ -240,60 +278,57 @@ class SearchResultItemViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'])
     def search(self, request):
         search_term = request.query_params.get('q', '')
-        date_from = request.query_params.get('date_from', None)
-        date_to = request.query_params.get('date_to', None)
-        destination_unit = request.query_params.get('destination_unit', None)
-        office = request.query_params.get('office', None)
-        file_type = request.query_params.get('file_type', None)
         current_status = request.query_params.get('current_status', None)
-        agent = request.query_params.get('agent', None)
-        treatment_folder_id = request.query_params.get('treatment_folder_id', None)
-        specific_file_id = request.query_params.get('specific_file_id', None)
-
-        # Create search filters
-        filters = SearchFilters.objects.create(
-            search_term=search_term,
-            date_from=date_from,
-            date_to=date_to,
-            destination_unit=destination_unit,
-            office=office,
-            file_type=file_type,
-            current_status=current_status,
-            agent=agent,
-            treatment_folder_id=treatment_folder_id,
-            specific_file_id=specific_file_id
-        )
-
-        # Perform search based on filters
-        results = SearchResultItem.objects.all()
+        file_type = request.query_params.get('file_type', None)
+        
+        # Search folders first
+        folder_queryset = Folder.objects.all()
         
         if search_term:
-            results = results.filter(
-                folder__title__icontains=search_term
-            ) | results.filter(
-                folder__subject__icontains=search_term
+            folder_queryset = folder_queryset.filter(
+                Q(folder_id__icontains=search_term) |
+                Q(title__icontains=search_term) |
+                Q(subject__icontains=search_term)
             )
-        if date_from:
-            results = results.filter(last_activity__gte=date_from)
-        if date_to:
-            results = results.filter(last_activity__lte=date_to)
-        if destination_unit:
-            results = results.filter(folder__destination_office=destination_unit)
-        if office:
-            results = results.filter(current_office=office)
-        if file_type:
-            results = results.filter(file__file_type=file_type)
+        
         if current_status:
-            results = results.filter(current_status=current_status)
-        if agent:
-            results = results.filter(folder__assigned_agent=agent)
-        if treatment_folder_id:
-            results = results.filter(folder__folder_id=treatment_folder_id)
-        if specific_file_id:
-            results = results.filter(file__id=specific_file_id)
-
-        serializer = self.get_serializer(results, many=True)
-        return Response(serializer.data)
+            folder_queryset = folder_queryset.filter(status__iexact=current_status)
+        
+        # Build results from folders
+        results = []
+        for folder in folder_queryset[:50]:  # Limit to 50 results
+            # Check if folder has files and filter by file type if specified
+            folder_files = folder.files.all()
+            if file_type:
+                folder_files = folder_files.filter(file_type__iexact=file_type)
+            
+            if folder_files.exists():
+                # Create result for each file in the folder
+                for file in folder_files:
+                    results.append({
+                        'id': str(folder.id),
+                        'folderId': folder.folder_id,
+                        'fileName': file.original_filename,
+                        'subject': folder.subject,
+                        'fileId': str(file.id),
+                        'currentOffice': folder.current_office.name if folder.current_office else 'N/A',
+                        'currentStatus': folder.status,
+                        'lastActivity': folder.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    })
+            else:
+                # Create result for folder without files
+                results.append({
+                    'id': str(folder.id),
+                    'folderId': folder.folder_id,
+                    'fileName': None,
+                    'subject': folder.subject,
+                    'fileId': None,
+                    'currentOffice': folder.current_office.name if folder.current_office else 'N/A',
+                    'currentStatus': folder.status,
+                    'lastActivity': folder.updated_at.strftime('%Y-%m-%d %H:%M:%S'),
+                })
+        
+        return Response(results)
 
 class SearchHistoryViewSet(viewsets.ModelViewSet):
     """
