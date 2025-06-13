@@ -143,6 +143,7 @@ class FolderFileViewSet(viewsets.ModelViewSet):
         if not folder:
             # This is a temporary file upload
             serializer.save(
+                file=uploaded_file,
                 uploaded_by=self.request.user,
                 original_filename=uploaded_file.name,
                 file_type=uploaded_file.content_type,
@@ -151,6 +152,7 @@ class FolderFileViewSet(viewsets.ModelViewSet):
             )
         else:
             serializer.save(
+                file=uploaded_file,
                 uploaded_by=self.request.user,
                 original_filename=uploaded_file.name,
                 file_type=uploaded_file.content_type,

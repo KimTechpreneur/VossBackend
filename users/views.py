@@ -22,7 +22,7 @@ from .pagination import StandardResultsSetPagination
 from .utils import (
     generate_secure_password, generate_reset_token,
     send_password_reset_email, send_user_invitation_email,
-    validate_password_strength
+    validate_password_strength, generate_voss_id
 )
 from django.conf import settings
 from datetime import timedelta, datetime
@@ -171,8 +171,14 @@ class UserViewSet(viewsets.ModelViewSet):
         else:  # invite
             temporary_password = generate_secure_password()
         
-        # Create user with temporary password
-        user = serializer.save()
+        # Create user instance from validated data
+        validated_data = serializer.validated_data
+        validated_data.pop('passwordMethod', None)
+        validated_data.pop('temporaryPassword', None)
+        force_password_change = validated_data.pop('forcePasswordChange', True)
+
+        user = User(**validated_data)
+        user.force_password_change = force_password_change
         user.set_password(temporary_password)
         user.save()
         
@@ -191,7 +197,7 @@ class UserViewSet(viewsets.ModelViewSet):
         # Send invitation email
         send_user_invitation_email(user, setup_url, temporary_password)
         
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'])
     def request_password_reset(self, request):

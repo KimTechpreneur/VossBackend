@@ -31,11 +31,11 @@ class PasswordResetAdmin(admin.ModelAdmin):
     ordering = ('-created_at',)
 
 @admin.register(User)
-class CustomUserAdmin(admin.ModelAdmin):
-    list_display = ('email', 'first_name', 'last_name', 'role', 'status', 'department', 'created_at')
-    list_filter = ('status', 'department', 'role', 'is_active', 'is_staff')
-    search_fields = ('email', 'first_name', 'last_name', 'employee_id', 'office_location')
-    readonly_fields = ('created_at', 'updated_at', 'last_login')
+class CustomUserAdmin(UserAdmin):
+    model = User
+    list_display = ('email', 'first_name', 'last_name', 'role', 'status', 'unit', 'last_login')
+    list_filter = ('status', 'unit', 'role')
+    search_fields = ('first_name', 'last_name', 'email', 'voss_id')
     ordering = ('-created_at',)
     
     fieldsets = (
@@ -43,12 +43,13 @@ class CustomUserAdmin(admin.ModelAdmin):
             'fields': ('email', 'first_name', 'last_name', 'phone')
         }),
         ('Work Information', {
-            'fields': ('role', 'status', 'department', 'employee_id', 'office_location', 'notes')
+            'fields': ('role', 'status', 'unit', 'office_location', 'notes', 'voss_id')
         }),
-        ('Security', {
-            'fields': ('is_active', 'is_staff', 'is_superuser', 'force_password_change')
+        ('Permissions', {
+            'fields': ('is_active', 'is_staff', 'is_superuser', 'groups', 'user_permissions'),
         }),
-        ('Important Dates', {
-            'fields': ('created_at', 'updated_at', 'last_login')
-        }),
+        ('Important dates', {'fields': ('last_login', 'created_at', 'updated_at')}),
+    )
+    add_fieldsets = UserAdmin.add_fieldsets + (
+        (None, {'fields': ('role', 'unit', 'office_location')}),
     )

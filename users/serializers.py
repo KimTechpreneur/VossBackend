@@ -73,7 +73,7 @@ class UserSerializer(serializers.ModelSerializer):
         ref_name = 'UsersUserSerializer'
         fields = [
             'id', 'email', 'first_name', 'last_name', 'phone', 'role', 'role_id',
-            'status', 'department', 'voss_id', 'office_location',
+            'status', 'unit', 'voss_id', 'office_location',
             'notes', 'last_login', 'force_password_change', 'initials',
             'created_at', 'updated_at', 'password'
         ]
@@ -107,7 +107,8 @@ class UserCreateSerializer(serializers.ModelSerializer):
     temporaryPassword = serializers.CharField(
         required=False,
         write_only=True,
-        min_length=8
+        min_length=8,
+        allow_blank=True
     )
     forcePasswordChange = serializers.BooleanField(
         default=True,
@@ -117,7 +118,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'role', 'department',
+            'id', 'email', 'first_name', 'last_name', 'phone', 'role', 'unit', 'office_location',
             'passwordMethod', 'temporaryPassword', 'forcePasswordChange'
         ]
         extra_kwargs = {
@@ -181,7 +182,7 @@ class UserCreateSerializer(serializers.ModelSerializer):
 class UserUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ['email', 'first_name', 'last_name', 'is_active', 'role', 'phone', 'office_location', 'status']
+        fields = ['email', 'first_name', 'last_name', 'is_active', 'role', 'phone', 'office_location', 'status', 'unit']
         extra_kwargs = {
             'email': {'required': False},
             'first_name': {'required': False},
@@ -303,7 +304,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'first_name', 'last_name', 'phone', 'role',
-            'status', 'department', 'voss_id', 'office_location',
+            'status', 'voss_id', 'office_location',
             'notes', 'last_login', 'initials', 'created_at', 'updated_at'
         ]
         read_only_fields = [

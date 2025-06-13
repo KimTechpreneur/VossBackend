@@ -21,10 +21,12 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         print(f"User {self.user.id} connected to notification socket.")
 
     async def disconnect(self, close_code):
-        await self.channel_layer.group_discard(
-            self.room_group_name,
-            self.channel_name
-        )
+        # Only attempt to discard the channel from the group if it was successfully added
+        if hasattr(self, 'room_group_name'):
+            await self.channel_layer.group_discard(
+                self.room_group_name,
+                self.channel_name
+            )
         print(f"User {self.user.id} disconnected.")
 
     # This method is called when a message is sent to the group.
@@ -33,4 +35,7 @@ class NotificationConsumer(AsyncWebsocketConsumer):
         
         # Send message to WebSocket
         await self.send(text_data=message)
-        print(f"Sent notification to {self.user.id}") 
+        print(f"Sent notification to {self.user.id}")
+
+    async def receive(self, text_data):
+        pass

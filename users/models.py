@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.utils import timezone
 import uuid
+from units.models import Unit
 from .utils import generate_voss_id
 
 class CustomUserManager(BaseUserManager):
@@ -78,16 +79,6 @@ class User(AbstractUser):
         ('Inactive', 'Inactive'),
         ('Suspended', 'Suspended'),
     )
-    
-    DEPARTMENT_CHOICES = (
-        ('Engineering Department', 'Engineering Department'),
-        ('IT Department', 'IT Department'),
-        ('Finance Department', 'Finance Department'),
-        ('Student Affairs', 'Student Affairs'),
-        ('Science Department', 'Science Department'),
-        ('Library', 'Library'),
-        ('Admissions', 'Admissions'),
-    )
 
     # Override id field to use UUID
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -100,7 +91,7 @@ class User(AbstractUser):
     phone = models.CharField(max_length=20, null=True, blank=True)
     role = models.ForeignKey(Role, on_delete=models.PROTECT, related_name='users', null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='Active')
-    department = models.CharField(max_length=50, choices=DEPARTMENT_CHOICES)
+    unit = models.ForeignKey(Unit, on_delete=models.SET_NULL, related_name='users', null=True, blank=True)
     voss_id = models.CharField(max_length=50, unique=True, null=True, blank=True)
     office_location = models.CharField(max_length=100, null=True, blank=True)
     notes = models.TextField(null=True, blank=True)
@@ -143,7 +134,7 @@ class User(AbstractUser):
     def save(self, *args, **kwargs):
         if not self.username:
             self.username = self.email
-        if not self.pk and not self.voss_id:  # Only generate for new users
+        if not self.voss_id:
             self.voss_id = generate_voss_id()
         super().save(*args, **kwargs)
 

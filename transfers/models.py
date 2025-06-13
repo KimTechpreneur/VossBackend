@@ -1,6 +1,7 @@
 from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
+import uuid
 
 User = get_user_model()
 
@@ -65,7 +66,7 @@ class Transfer(models.Model):
     ]
 
     # Basic Information
-    id = models.CharField(max_length=50, primary_key=True)  # e.g., TF-20250524-ENG-0032
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     folder = models.ForeignKey('folders.Folder', on_delete=models.PROTECT, related_name='transfers')
     source_office = models.ForeignKey(
         'offices.Office', 
@@ -133,15 +134,19 @@ class Transfer(models.Model):
 
     def save(self, *args, **kwargs):
         # Track status changes in history
-        if self.pk:
-            old_instance = Transfer.objects.get(pk=self.pk)
-            if old_instance.status != self.status:
-                self.history.append({
-                    'timestamp': timezone.now().isoformat(),
-                    'old_status': old_instance.status,
-                    'new_status': self.status,
-                    'changed_by': self._current_user.id if hasattr(self, '_current_user') else None
-                })
+        if not self._state.adding:
+            try:
+                old_instance = Transfer.objects.get(pk=self.pk)
+                if old_instance.status != self.status:
+                    self.history.append({
+                        'timestamp': timezone.now().isoformat(),
+                        'old_status': old_instance.status,
+                        'new_status': self.status,
+                        'changed_by': self._current_user.id if hasattr(self, '_current_user') else None
+                    })
+            except Transfer.DoesNotExist:
+                # This can happen in some edge cases, so we just skip history tracking
+                pass
         super().save(*args, **kwargs)
 
     @property

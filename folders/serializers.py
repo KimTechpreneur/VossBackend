@@ -1,3 +1,4 @@
+from django.contrib.auth import get_user_model
 from rest_framework import serializers, fields
 from .models import (
     Folder, FolderFile, FolderTransfer, FolderService,
@@ -78,9 +79,15 @@ class FolderFileSerializer(serializers.ModelSerializer):
             'archived_by', 'is_temporary'
         ]
         read_only_fields = [
-            'id', 'uploaded_at', 'archived_at', 'original_filename', 
-            'file_type', 'file_size', 'formatted_size', 'uploaded_by', 'is_temporary'
+            'id', 'uploaded_at', 'archived_at', 'formatted_size'
         ]
+        extra_kwargs = {
+            'original_filename': {'required': False},
+            'file_type': {'required': False},
+            'file_size': {'required': False},
+            'uploaded_by': {'required': False},
+            'is_temporary': {'required': False},
+        }
 
 class FolderSignatureSerializer(serializers.ModelSerializer):
     class Meta:
