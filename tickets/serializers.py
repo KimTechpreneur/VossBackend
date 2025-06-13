@@ -10,6 +10,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
+        ref_name = 'TicketsUserSerializer'
         fields = ['id', 'username', 'email', 'first_name', 'last_name', 'name', 'display_name']
 
     def get_name(self, obj):

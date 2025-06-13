@@ -70,6 +70,7 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
+        ref_name = 'UsersUserSerializer'
         fields = [
             'id', 'email', 'first_name', 'last_name', 'phone', 'role', 'role_id',
             'status', 'department', 'voss_id', 'office_location',

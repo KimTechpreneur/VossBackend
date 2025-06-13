@@ -114,19 +114,19 @@ class ReportViewSet(viewsets.ModelViewSet):
                         'label': 'from last month'
                     },
                     'accentColor': 'primary',
-                    'icon': 'FileText'
+                    'iconName': 'FileText'
                 },
                 {
                     'title': 'Active Units',
                     'value': active_units,
                     'accentColor': 'success',
-                    'icon': 'Building'
+                    'iconName': 'Building'
                 },
                 {
                     'title': 'Active Offices',
                     'value': active_offices,
                     'accentColor': 'secondary',
-                    'icon': 'Building2'
+                    'iconName': 'Building2'
                 },
                 {
                     'title': 'Total Transfers',
@@ -137,7 +137,7 @@ class ReportViewSet(viewsets.ModelViewSet):
                         'label': 'this month'
                     },
                     'accentColor': 'warning',
-                    'icon': 'ArrowRightLeft'
+                    'iconName': 'ArrowRightLeft'
                 }
             ]
             
