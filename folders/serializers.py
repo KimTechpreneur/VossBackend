@@ -186,13 +186,13 @@ class FolderSerializer(serializers.ModelSerializer):
         return obj.retention_class.name if obj.retention_class else None
 
     def get_source_office_name(self, obj):
-        return obj.source_office.name if obj.source_office else None
+        return obj.source_office.office_name if obj.source_office else None
 
     def get_destination_office_name(self, obj):
-        return obj.destination_office.name if obj.destination_office else None
+        return obj.destination_office.office_name if obj.destination_office else None
 
     def get_current_office_name(self, obj):
-        return obj.current_office.name if obj.current_office else None
+        return obj.current_office.office_name if obj.current_office else None
 
     def get_last_modified_by_name(self, obj):
         return obj.last_modified_by.get_full_name() if obj.last_modified_by else None

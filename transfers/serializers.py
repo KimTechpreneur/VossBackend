@@ -186,9 +186,9 @@ class CreateTransferSerializer(serializers.ModelSerializer):
             RoutingStep.objects.create(
                 transfer=transfer,
                 step_number=step_data.get('step_number'),
-                unit_office_id=step_data.get('destinationUnit'),
-                responsible_user_id=step_data.get('responsibleUser'),
-                due_date=step_data.get('dueDate') or None
+                unit_office_id=step_data.get('unit_office'),
+                responsible_user_id=step_data.get('responsible_user_id'),
+                due_date=step_data.get('due_date') or None
             )
 
         # Handle attached files

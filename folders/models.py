@@ -175,7 +175,7 @@ class Folder(models.Model):
 
     @property
     def current_location(self):
-        return self.current_office.name if self.current_office else "N/A"
+        return self.current_office.office_name if self.current_office else "N/A"
 
     @property
     def status_flags(self):
@@ -188,7 +188,7 @@ class Folder(models.Model):
 
     def get_current_location(self):
         """Returns the name of the current office holding the folder."""
-        return self.current_office.name if self.current_office else "N/A"
+        return self.current_office.office_name if self.current_office else "N/A"
 
     def save(self, *args, **kwargs):
         if not self.folder_id:
