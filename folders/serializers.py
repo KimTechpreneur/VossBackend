@@ -67,6 +67,7 @@ class RetentionClassSerializer(serializers.ModelSerializer):
 
 class FolderFileSerializer(serializers.ModelSerializer):
     formatted_size = serializers.CharField(read_only=True)
+    folder = serializers.PrimaryKeyRelatedField(queryset=Folder.objects.all(), required=False)
 
     class Meta:
         model = FolderFile
@@ -74,11 +75,11 @@ class FolderFileSerializer(serializers.ModelSerializer):
             'id', 'folder', 'file', 'original_filename', 'file_type', 
             'file_size', 'formatted_size', 'uploaded_by', 'uploaded_at',
             'description', 'is_archived', 'archived_at',
-            'archived_by'
+            'archived_by', 'is_temporary'
         ]
         read_only_fields = [
             'id', 'uploaded_at', 'archived_at', 'original_filename', 
-            'file_type', 'file_size', 'formatted_size', 'uploaded_by'
+            'file_type', 'file_size', 'formatted_size', 'uploaded_by', 'is_temporary'
         ]
 
 class FolderSignatureSerializer(serializers.ModelSerializer):
@@ -127,19 +128,19 @@ class FolderTransferSerializer(serializers.ModelSerializer):
         ]
 
 class FolderSerializer(serializers.ModelSerializer):
-    service_name = serializers.CharField(source='service.name', read_only=True, allow_null=True)
-    category_name = serializers.CharField(source='category.name', read_only=True, allow_null=True)
-    retention_class_name = serializers.CharField(source='retention_class.name', read_only=True, allow_null=True)
-    source_office_name = serializers.CharField(source='source_office.name', read_only=True, allow_null=True)
-    destination_office_name = serializers.CharField(source='destination_office.name', read_only=True, allow_null=True)
-    current_office_name = serializers.CharField(source='current_office.name', read_only=True, allow_null=True)
-    created_by_name = serializers.CharField(source='created_by.get_full_name', read_only=True, allow_null=True)
-    last_modified_by_name = serializers.CharField(source='last_modified_by.get_full_name', read_only=True, allow_null=True)
-    assigned_agent_name = serializers.CharField(source='assigned_agent.get_full_name', read_only=True, allow_null=True)
+    service_name = serializers.SerializerMethodField()
+    category_name = serializers.SerializerMethodField()
+    retention_class_name = serializers.SerializerMethodField()
+    source_office_name = serializers.SerializerMethodField()
+    destination_office_name = serializers.SerializerMethodField()
+    current_office_name = serializers.SerializerMethodField()
+    last_modified_by_name = serializers.SerializerMethodField()
+    assigned_agent_name = serializers.SerializerMethodField()
     is_overdue = serializers.BooleanField(read_only=True)
     file_count = serializers.IntegerField(read_only=True)
     current_location = serializers.CharField(read_only=True)
-    status_flags = serializers.JSONField(read_only=True)
+    status_flags = serializers.SerializerMethodField()
+    created_by_name = serializers.SerializerMethodField()
 
     class Meta:
         model = Folder
@@ -156,6 +157,41 @@ class FolderSerializer(serializers.ModelSerializer):
             'file_count', 'current_location', 'status_flags'
         ]
         read_only_fields = ['id', 'folder_id', 'created_at', 'updated_at', 'completed_at']
+
+    def get_status_flags(self, obj):
+        return {
+            'inTransit': obj.status == 'IN_TRANSIT',
+            'overdue': obj.is_overdue,
+            'requiresSignature': obj.requires_signature,
+            'isSigned': obj.is_signed
+        }
+
+    def get_created_by_name(self, obj):
+        return obj.created_by.get_full_name() if obj.created_by else None
+
+    def get_service_name(self, obj):
+        return obj.service.name if obj.service else None
+
+    def get_category_name(self, obj):
+        return obj.category.name if obj.category else None
+
+    def get_retention_class_name(self, obj):
+        return obj.retention_class.name if obj.retention_class else None
+
+    def get_source_office_name(self, obj):
+        return obj.source_office.name if obj.source_office else None
+
+    def get_destination_office_name(self, obj):
+        return obj.destination_office.name if obj.destination_office else None
+
+    def get_current_office_name(self, obj):
+        return obj.current_office.name if obj.current_office else None
+
+    def get_last_modified_by_name(self, obj):
+        return obj.last_modified_by.get_full_name() if obj.last_modified_by else None
+
+    def get_assigned_agent_name(self, obj):
+        return obj.assigned_agent.get_full_name() if obj.assigned_agent else None
 
 class FolderBulkUpdateSerializer(serializers.Serializer):
     folder_ids = serializers.ListField(

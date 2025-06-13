@@ -175,7 +175,7 @@ class Folder(models.Model):
 
     @property
     def current_location(self):
-        return self.source_office.name if self.source_office else "N/A"
+        return self.current_office.name if self.current_office else "N/A"
 
     @property
     def status_flags(self):
@@ -188,7 +188,7 @@ class Folder(models.Model):
 
     def get_current_location(self):
         """Returns the name of the current office holding the folder."""
-        return self.source_office.name if self.source_office else "N/A"
+        return self.current_office.name if self.current_office else "N/A"
 
     def save(self, *args, **kwargs):
         if not self.folder_id:
@@ -203,10 +203,14 @@ def get_file_path(instance, filename):
     # Generate a unique path for the file
     ext = filename.split('.')[-1]
     filename = f"{uuid.uuid4()}.{ext}"
-    return os.path.join('folder_files', str(instance.folder.id), filename)
+    if instance.folder:
+        return os.path.join('folder_files', str(instance.folder.id), filename)
+    else:
+        return os.path.join('temp_files', filename)
 
 class FolderFile(models.Model):
-    folder = models.ForeignKey('Folder', on_delete=models.CASCADE, related_name='files')
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    folder = models.ForeignKey('Folder', on_delete=models.CASCADE, related_name='files', null=True, blank=True)
     file = models.FileField(upload_to=get_file_path)
     original_filename = models.CharField(max_length=255)
     file_type = models.CharField(max_length=100)
@@ -214,6 +218,7 @@ class FolderFile(models.Model):
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     description = models.TextField(blank=True, null=True)
+    is_temporary = models.BooleanField(default=False)
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
     deleted_by = models.ForeignKey(
@@ -241,7 +246,21 @@ class FolderFile(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.original_filename} ({self.folder.name})"
+        if self.folder:
+            return f"{self.original_filename} ({self.folder.title})"
+        return f"{self.original_filename} (Temporary File)"
+
+    @property
+    def formatted_size(self):
+        if self.file_size is None or self.file_size == 0:
+            return "0 Bytes"
+        
+        import math
+        size_name = ("Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+        i = int(math.floor(math.log(self.file_size, 1024)))
+        p = math.pow(1024, i)
+        s = round(self.file_size / p, 2)
+        return f"{s} {size_name[i]}"
 
     def delete(self, *args, **kwargs):
         # Soft delete

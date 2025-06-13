@@ -191,21 +191,17 @@ class CreateTransferSerializer(serializers.ModelSerializer):
         # Handle attached files
         if attached_file_ids:
             from folders.models import FolderFile
-            # This logic assumes attached_file_ids refer to a temporary file store
-            # and that we can retrieve file metadata from there.
-            # This part needs to be adapted to the actual file handling implementation.
+            
             for file_id in attached_file_ids:
-                # Placeholder for getting file data from a temporary storage
-                # file_obj = TemporaryFile.objects.get(id=file_id)
-                FolderFile.objects.create(
-                    folder=folder,
-                    # file=file_obj.file,
-                    # original_filename=file_obj.filename,
-                    # file_size=file_obj.size,
-                    # file_type=file_obj.content_type,
-                    uploaded_by=self.context['request'].user
-                )
-                # file_obj.delete() # Clean up temporary file
+                try:
+                    file_obj = FolderFile.objects.get(id=file_id, is_temporary=True)
+                    file_obj.folder = folder
+                    file_obj.is_temporary = False
+                    file_obj.save()
+                except FolderFile.DoesNotExist:
+                    # Handle case where the file ID is invalid or not temporary
+                    # You might want to log this or raise a validation error
+                    pass
 
         return transfer
 

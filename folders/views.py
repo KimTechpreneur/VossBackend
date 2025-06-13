@@ -131,13 +131,31 @@ class FolderFileViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
-        uploaded_file = self.request.data.get('file')
-        serializer.save(
-            uploaded_by=self.request.user,
-            original_filename=uploaded_file.name,
-            file_type=uploaded_file.content_type,
-            file_size=uploaded_file.size
-        )
+        uploaded_file = self.request.FILES.get('file')
+        
+        if not uploaded_file:
+            # Handle case where no file is uploaded but the endpoint is hit
+            # This might be considered a bad request, depending on API design
+            return
+            
+        folder = serializer.validated_data.get('folder')
+        
+        if not folder:
+            # This is a temporary file upload
+            serializer.save(
+                uploaded_by=self.request.user,
+                original_filename=uploaded_file.name,
+                file_type=uploaded_file.content_type,
+                file_size=uploaded_file.size,
+                is_temporary=True
+            )
+        else:
+            serializer.save(
+                uploaded_by=self.request.user,
+                original_filename=uploaded_file.name,
+                file_type=uploaded_file.content_type,
+                file_size=uploaded_file.size
+            )
 
     def get_queryset(self):
         queryset = super().get_queryset()
