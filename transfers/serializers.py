@@ -178,6 +178,8 @@ class CreateTransferSerializer(serializers.ModelSerializer):
             created_by=self.context['request'].user,
             source_office_id=source_office_id,
             destination_office_id=destination_office_id,
+            status='submitted',
+            submitted_at=timezone.now(),
             **validated_data
         )
 

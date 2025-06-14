@@ -3,12 +3,15 @@ from django.dispatch import receiver
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
 import json
+from django.conf import settings
+from django.core.mail import send_mail
 
 # It's common to have a central place for business logic that determines who should be notified.
 # For this example, let's assume you have a 'transfers' app with a 'FolderTransfer' model.
 # You would need to import the actual models involved in the events.
 # from transfers.models import FolderTransfer 
 
+from transfers.models import Transfer, RoutingStep
 from .models import Notification, NotificationHistoryItem, User
 from .serializers import NotificationHistoryItemSerializer
 
@@ -17,27 +20,25 @@ from .serializers import NotificationHistoryItemSerializer
 class FolderTransfer:
     pass
 
-@receiver(post_save, sender=FolderTransfer)
-def folder_transfer_notification_handler(sender, instance, created, **kwargs):
+@receiver(post_save, sender=Transfer)
+def transfer_notification_handler(sender, instance, created, **kwargs):
     """
-    Listens for a new FolderTransfer and creates notifications.
+    Listens for a new Transfer and creates notifications for relevant parties.
     """
     if not created:
-        # We are only interested in newly created transfers for this example.
-        # You can add logic for updates here as well (e.g., if status changes).
         return
 
     # --- 1. Define the Notification Content ---
-    # In a real app, this would be more dynamic, perhaps using NotificationTemplates.
-    title = f"New Folder Transfer: {instance.id}"
-    message = f"A new folder has been transferred from {instance.origin_office} to {instance.destination_office}."
+    title = f"New Transfer Created: {instance.folder.title}"
+    message = f"A new transfer '{instance.folder.title}' from {instance.source_office.office_name} to {instance.destination_office.office_name} has been created by {instance.created_by.get_full_name()}."
     
     # --- 2. Determine Recipients ---
-    # This is a critical step. You need to fetch the actual user objects who should be notified.
-    # Example: Notifying all staff in the destination office.
-    # This logic depends heavily on your User and Office models.
-    # For this example, we'll just notify the creator (a placeholder).
-    recipients = [instance.created_by] # Replace with your actual logic.
+    # We will notify the creator and the user responsible for the first step.
+    recipients = {instance.created_by}
+    
+    first_step = instance.routing_steps.order_by('step_number').first()
+    if first_step and first_step.responsible_user:
+        recipients.add(first_step.responsible_user)
     
     # --- 3. Create and Broadcast Notifications ---
     for user in recipients:
@@ -45,42 +46,44 @@ def folder_transfer_notification_handler(sender, instance, created, **kwargs):
             print(f"Warning: Recipient '{user}' is not a valid User object. Skipping.")
             continue
 
-        # Create the in-app notification history item that the user will see in their list.
-        history_item = NotificationHistoryItem.objects.create(
-            user=user,
-            title=title,
-            message=message,
-            type='transfer', # Matches the frontend type
-            reference_id=str(instance.id)
-        )
+        # Create the in-app notification if enabled
+        if instance.notifications.get('in_app', False):
+            history_item = NotificationHistoryItem.objects.create(
+                user=user,
+                title=title,
+                message=message,
+                type='transfer',
+                reference_id=str(instance.id)
+            )
+            
+            # Send to WebSocket
+            channel_layer = get_channel_layer()
+            user_channel_group = f"notifications_{user.id}"
+            serializer = NotificationHistoryItemSerializer(history_item)
+            
+            async_to_sync(channel_layer.group_send)(
+                user_channel_group,
+                {
+                    'type': 'send_notification',
+                    'message': json.dumps(serializer.data)
+                }
+            )
 
-        # The 'Notification' model could be used for more persistent, auditable notifications
-        # or for queueing emails, but for real-time in-app, NotificationHistoryItem is sufficient.
-        
-        # --- 4. Send to WebSocket ---
-        channel_layer = get_channel_layer()
-        # Every user needs to be in a group named after their user ID.
-        # Your consumer should handle adding users to this group on connection.
-        user_channel_group = f"notifications_{user.id}"
+        # Send email notification if enabled
+        if instance.notifications.get('email', False):
+            send_mail(
+                'New VOSS Transfer Created',
+                f"Hello {user.first_name},\n\n{message}\n\nYou have been assigned a role in this transfer. Please log in to VOSS for details.\n\nThank you,\nThe VOSS Team",
+                settings.DEFAULT_FROM_EMAIL,
+                [user.email],
+                fail_silently=False,
+            )
 
-        # Serialize the data that the frontend expects
-        serializer = NotificationHistoryItemSerializer(history_item)
-        
-        async_to_sync(channel_layer.group_send)(
-            user_channel_group,
-            {
-                'type': 'send_notification',
-                'message': json.dumps(serializer.data)
-            }
-        )
-
-    print(f"Notifications sent for FolderTransfer {instance.id}")
-
+    print(f"Notifications sent for Transfer {instance.id}")
 
 def connect_signals():
     """
     A function to connect all signals. Called in apps.py.
     """
-    # Connect more signals here as you add more handlers.
-    post_save.connect(folder_transfer_notification_handler, sender=FolderTransfer)
-    print("Notification signals connected.")
+    post_save.connect(transfer_notification_handler, sender=Transfer)
+    print("Transfer notification signals connected.")

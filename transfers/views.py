@@ -3,7 +3,7 @@ from rest_framework import viewsets, status, filters
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, Count, Avg
 from drf_yasg.utils import swagger_auto_schema
 from .models import Transfer, RoutingStep
 from .serializers import (
@@ -13,6 +13,7 @@ from .serializers import (
 from rest_framework.permissions import IsAuthenticated
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+from notifications.utils import create_and_send_notification
 
 class TransferViewSet(viewsets.ModelViewSet):
     """
@@ -49,6 +50,14 @@ class TransferViewSet(viewsets.ModelViewSet):
             return CreateTransferSerializer
         return TransferSerializer
 
+    def create(self, request, *args, **kwargs):
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        instance = serializer.save()
+        response_serializer = TransferSerializer(instance, context=self.get_serializer_context())
+        headers = self.get_success_headers(response_serializer.data)
+        return Response(response_serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
     def get_queryset(self):
         queryset = super().get_queryset()
         
@@ -59,6 +68,7 @@ class TransferViewSet(viewsets.ModelViewSet):
         date_to = self.request.query_params.get('dateRangeTo')
         owning_unit = self.request.query_params.get('owningUnit')
         assigned_agent = self.request.query_params.get('assignedAgent')
+        agent_id = self.request.query_params.get('agent_id')
         
         if status:
             queryset = queryset.filter(status=status)
@@ -72,6 +82,8 @@ class TransferViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(source_office__name=owning_unit)
         if assigned_agent:
             queryset = queryset.filter(agent__username=assigned_agent)
+        if agent_id:
+            queryset = queryset.filter(agent_id=agent_id)
             
         return queryset.select_related(
             'folder', 'source_office', 'destination_office',
@@ -87,8 +99,12 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def active(self, request):
-        transfers = self.get_queryset().filter(status__in=['submitted', 'in_transit'])
-        serializer = self.get_serializer(transfers, many=True)
+        queryset = self.get_queryset().filter(status__in=['submitted', 'in_transit'])
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
@@ -100,11 +116,15 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def overdue(self, request):
-        transfers = self.get_queryset().filter(
+        queryset = self.get_queryset().filter(
             status__in=['submitted', 'in_transit'],
             due_date__lt=timezone.now()
         )
-        serializer = self.get_serializer(transfers, many=True)
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
@@ -116,8 +136,12 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def completed(self, request):
-        transfers = self.get_queryset().filter(status='delivered')
-        serializer = self.get_serializer(transfers, many=True)
+        queryset = self.get_queryset().filter(status='delivered')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
@@ -129,8 +153,12 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def draft(self, request):
-        transfers = self.get_queryset().filter(status='draft')
-        serializer = self.get_serializer(transfers, many=True)
+        queryset = self.get_queryset().filter(status='draft')
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
@@ -142,8 +170,12 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['get'])
     def returned(self, request):
-        transfers = self.get_queryset().filter(status__in=['returned', 'return_approved', 'return_rejected'])
-        serializer = self.get_serializer(transfers, many=True)
+        queryset = self.get_queryset().filter(status__in=['returned', 'return_approved', 'return_rejected'])
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     @swagger_auto_schema(
@@ -288,6 +320,64 @@ class TransferViewSet(viewsets.ModelViewSet):
         transfer.save()
         
         return Response({'status': 'transfer return rejected'})
+
+    @swagger_auto_schema(
+        operation_description="Scan a transfer QR code",
+        responses={
+            200: "Transfer scanned successfully",
+            404: "Transfer not found",
+            400: "Invalid QR code or transfer status"
+        }
+    )
+    @action(detail=True, methods=['post'])
+    def scan(self, request, pk=None):
+        """
+        Handles the scanning of a transfer's QR code for pickup or delivery.
+        """
+        transfer = self.get_object()
+        user = request.user
+
+        # Agent pickup
+        if transfer.status == 'submitted' and transfer.agent == user:
+            transfer.status = 'in_transit'
+            transfer.save()
+            # Notify the creator that the agent has picked up the transfer
+            create_and_send_notification(
+                user=transfer.created_by,
+                title="Transfer Picked Up",
+                message=f"Agent {user.get_full_name()} has picked up transfer '{transfer.folder.title}'.",
+                notification_type='transfer_update',
+                reference_id=str(transfer.id)
+            )
+            return Response({'status': 'pickup_confirmed'})
+
+        # Recipient delivery
+        if transfer.status == 'in_transit' and transfer.destination_office in user.office_set.all():
+            transfer.status = 'delivered'
+            transfer.completed_at = timezone.now()
+            transfer.save()
+            # Notify the creator and agent that the transfer has been delivered
+            create_and_send_notification(
+                user=transfer.created_by,
+                title="Transfer Delivered",
+                message=f"Transfer '{transfer.folder.title}' has been successfully delivered to {transfer.destination_office.office_name}.",
+                notification_type='transfer_update',
+                reference_id=str(transfer.id)
+            )
+            if transfer.agent:
+                create_and_send_notification(
+                    user=transfer.agent,
+                    title="Transfer Delivered",
+                    message=f"Your assigned transfer '{transfer.folder.title}' has been delivered.",
+                    notification_type='transfer_update',
+                    reference_id=str(transfer.id)
+                )
+            return Response({'status': 'delivery_confirmed'})
+
+        return Response(
+            {"error": "This QR code is not valid for the current transfer status or user."},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     @swagger_auto_schema(
         operation_description="Request revision of a transfer",
@@ -473,6 +563,85 @@ class TransferViewSet(viewsets.ModelViewSet):
             transfer.save()
         
         return Response({'status': 'transfers submitted'})
+
+    @swagger_auto_schema(
+        operation_description="Get summary metrics for all transfer types.",
+        responses={200: "A JSON object with metrics for each transfer status."}
+    )
+    @action(detail=False, methods=['get'])
+    def metrics(self, request):
+        """
+        Returns a dictionary of summary metrics for various transfer statuses.
+        Accepts a 'scope' query parameter to limit the metrics returned.
+        """
+        scope = request.query_params.get('scope')
+        now = timezone.now()
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_week = today_start - timezone.timedelta(days=now.weekday())
+        start_of_last_week = start_of_week - timezone.timedelta(days=7)
+
+        # Base querysets
+        active_transfers = Transfer.objects.filter(status__in=['submitted', 'in_transit'])
+        overdue_transfers = active_transfers.filter(due_date__lt=now)
+        completed_transfers = Transfer.objects.filter(status='delivered')
+        draft_transfers = Transfer.objects.filter(status='draft')
+        returned_transfers = Transfer.objects.filter(status__in=['returned', 'return_approved', 'return_rejected'])
+
+        metrics = {}
+
+        if not scope or scope == 'active':
+            metrics['active'] = {
+                'totalActive': active_transfers.count(),
+                'pickedUpToday': active_transfers.filter(routing_steps__status='completed', routing_steps__completed_at__gte=today_start).distinct().count(),
+                'pickedUpThisWeek': active_transfers.filter(routing_steps__status='completed', routing_steps__completed_at__gte=start_of_week).distinct().count(),
+                'pendingReceipt': active_transfers.filter(routing_steps__status='pending').distinct().count(),
+                'overdue': overdue_transfers.count(),
+                'trend': active_transfers.filter(created_at__gte=start_of_last_week).count() - active_transfers.filter(created_at__gte=start_of_week).count()
+            }
+        
+        if not scope or scope == 'overdue':
+            metrics['overdue'] = {
+                'totalOverdue': overdue_transfers.count(),
+                'overdueThreePlusDays': overdue_transfers.filter(due_date__lt=now - timezone.timedelta(days=3)).count(),
+                'withAgentsNotDelivered': overdue_transfers.filter(delivery_method='agent').count(),
+                'escalatedFiles': overdue_transfers.filter(status='escalated').count(),
+                'trend': overdue_transfers.filter(created_at__gte=start_of_last_week).count() - overdue_transfers.filter(created_at__gte=start_of_week).count()
+            }
+
+        if not scope or scope == 'completed':
+            metrics['completed'] = {
+                'totalCompleted': completed_transfers.count(),
+                'completedToday': completed_transfers.filter(completed_at__gte=today_start).count(),
+                'completedThisWeek': completed_transfers.filter(completed_at__gte=start_of_week).count(),
+                'averageRating': 0,
+                'fastestDelivery': 'N/A' 
+            }
+
+        if not scope or scope == 'draft':
+            metrics['draft'] = {
+                'totalDrafts': draft_transfers.count(),
+                'recentlyModified': draft_transfers.filter(updated_at__gte=now - timezone.timedelta(days=7)).count(),
+                'oldDrafts': draft_transfers.filter(updated_at__lt=now - timezone.timedelta(days=30)).count(),
+            }
+
+        if not scope or scope == 'returns':
+            metrics['returns'] = {
+                'totalReturns': returned_transfers.count(),
+                'pendingReview': returned_transfers.filter(status='returned').count(),
+                'approvedToday': returned_transfers.filter(status='return_approved', updated_at__gte=today_start).count(),
+                'rejectedToday': returned_transfers.filter(status='return_rejected', updated_at__gte=today_start).count(),
+                'trend': returned_transfers.filter(created_at__gte=start_of_last_week).count() - returned_transfers.filter(created_at__gte=start_of_week).count()
+            }
+        
+        if not scope or scope == 'history':
+             metrics['history'] = {
+                'totalTransfers': Transfer.objects.all().count(),
+                'completedThisMonth': completed_transfers.filter(completed_at__gte=now.replace(day=1)).count(),
+                'averageDuration': 'N/A',
+                'successRate': (completed_transfers.count() / Transfer.objects.all().count() * 100) if Transfer.objects.all().count() > 0 else 0
+            }
+        
+        return Response(metrics)
 
 def mark_as_collected(request, transfer_id):
     transfer = Transfer.objects.get(id=transfer_id)

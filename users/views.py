@@ -35,6 +35,7 @@ class PermissionViewSet(viewsets.ModelViewSet):
     queryset = Permission.objects.all()
     serializer_class = PermissionSerializer
     permission_classes = [permissions.IsAuthenticated, IsAdminUser]
+    pagination_class = None  # Disable pagination
 
     def get_queryset(self):
         queryset = super().get_queryset()
