@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from django.utils import timezone
 from .models import Transfer, RoutingStep
+import uuid
 
 class RoutingStepSerializer(serializers.ModelSerializer):
     unit_office = serializers.SerializerMethodField()
@@ -40,6 +41,7 @@ class TransferSerializer(serializers.ModelSerializer):
     current_step = serializers.SerializerMethodField()
     next_step = serializers.SerializerMethodField()
     is_overdue = serializers.SerializerMethodField()
+    history = serializers.SerializerMethodField()
 
     class Meta:
         model = Transfer
@@ -95,6 +97,23 @@ class TransferSerializer(serializers.ModelSerializer):
 
     def get_is_overdue(self, obj):
         return obj.is_overdue
+
+    def get_history(self, obj):
+        # Manually serialize history to handle UUIDs
+        if not obj.history:
+            return None
+        
+        # Assuming history is a list of dicts
+        serialized_history = []
+        for record in obj.history:
+            serialized_record = {}
+            for key, value in record.items():
+                if isinstance(value, uuid.UUID):
+                    serialized_record[key] = str(value)
+                else:
+                    serialized_record[key] = value
+            serialized_history.append(serialized_record)
+        return serialized_history
 
     def validate(self, data):
         # Validate delivery method and agent

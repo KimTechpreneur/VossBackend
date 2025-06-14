@@ -2,7 +2,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
-import json
 from django.conf import settings
 from django.core.mail import send_mail
 
@@ -14,6 +13,7 @@ from django.core.mail import send_mail
 from transfers.models import Transfer, RoutingStep
 from .models import Notification, NotificationHistoryItem, User
 from .serializers import NotificationHistoryItemSerializer
+from .utils import json_encode
 
 # This is a placeholder for your actual FolderTransfer model. 
 # You should remove this and import your real model.
@@ -65,7 +65,7 @@ def transfer_notification_handler(sender, instance, created, **kwargs):
                 user_channel_group,
                 {
                     'type': 'send_notification',
-                    'message': json.dumps(serializer.data)
+                    'message': json_encode(serializer.data)
                 }
             )
 
