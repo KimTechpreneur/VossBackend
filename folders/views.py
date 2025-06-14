@@ -446,16 +446,40 @@ class FolderViewSet(viewsets.ModelViewSet):
         return queryset.order_by('-created_at')
 
     def get_permissions(self):
-        if self.action in ['destroy', 'bulk_update']:
-            return [IsAdminUser()]
-        elif self.action in ['update', 'partial_update']:
-            return [IsOwnerOrAdmin()]
-        return [IsAuthenticated()]
+        if self.action in ['create', 'list']:
+            return [permissions.IsAuthenticated()]
+        # Use IsOwnerOrAdmin for retrieve, update, partial_update, destroy
+        return [IsOwnerOrAdmin()]
 
-    def get_serializer_class(self):
-        if self.action == 'retrieve':
-            return FolderDetailSerializer
-        return FolderSerializer
+    @action(detail=True, methods=['get'])
+    def history(self, request, pk=None):
+        """
+        Return the history of a specific folder.
+        """
+        folder = self.get_object()
+        history_data = []
+
+        # Add creation event
+        history_data.append({
+            'timestamp': folder.created_at,
+            'action': 'Created',
+            'details': f'Folder "{folder.title}" was created.',
+            'user': folder.created_by.get_full_name() if folder.created_by else 'System'
+        })
+
+        # Add last updated event
+        if folder.updated_at and folder.updated_at != folder.created_at:
+            history_data.append({
+                'timestamp': folder.updated_at,
+                'action': 'Updated',
+                'details': 'Folder details were updated.',
+                'user': 'System' # This would need a more sophisticated tracking mechanism
+            })
+        
+        # This is a placeholder. You can expand this by querying related models
+        # like FolderTransfer, FolderComment, etc., to build a comprehensive history.
+
+        return Response({'history': history_data})
 
     @action(detail=False, methods=['post'])
     def bulk_update(self, request):
