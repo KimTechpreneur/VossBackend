@@ -21,6 +21,7 @@ from users.permissions import IsAdminUser, IsOwnerOrAdmin
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
 from rest_framework.permissions import IsAuthenticated
+from rest_framework import serializers
 
 # Create your views here.
 
@@ -134,11 +135,15 @@ class FolderFileViewSet(viewsets.ModelViewSet):
         uploaded_file = self.request.FILES.get('file')
         
         if not uploaded_file:
-            # Handle case where no file is uploaded but the endpoint is hit
-            # This might be considered a bad request, depending on API design
-            return
+            raise serializers.ValidationError("No file was uploaded")
             
         folder = serializer.validated_data.get('folder')
+        
+        try:
+            # Convert file size to string
+            file_size = str(max(0, int(uploaded_file.size)))
+        except (TypeError, ValueError):
+            file_size = '0'
         
         if not folder:
             # This is a temporary file upload
@@ -146,8 +151,8 @@ class FolderFileViewSet(viewsets.ModelViewSet):
                 file=uploaded_file,
                 uploaded_by=self.request.user,
                 original_filename=uploaded_file.name,
-                file_type=uploaded_file.content_type,
-                file_size=uploaded_file.size,
+                file_type=uploaded_file.content_type or 'application/octet-stream',
+                file_size=file_size,
                 is_temporary=True
             )
         else:
@@ -155,8 +160,8 @@ class FolderFileViewSet(viewsets.ModelViewSet):
                 file=uploaded_file,
                 uploaded_by=self.request.user,
                 original_filename=uploaded_file.name,
-                file_type=uploaded_file.content_type,
-                file_size=uploaded_file.size
+                file_type=uploaded_file.content_type or 'application/octet-stream',
+                file_size=file_size
             )
 
     def get_queryset(self):

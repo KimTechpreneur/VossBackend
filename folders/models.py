@@ -83,7 +83,7 @@ class Folder(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     folder_id = models.CharField(max_length=255, unique=True, blank=True)
     title = models.CharField(max_length=255)
-    subject = models.CharField(max_length=255, db_index=True)
+    subject = models.CharField(max_length=255, db_index=True, default='')
     description = models.TextField(blank=True, null=True)
     status = models.CharField(
         max_length=20,
@@ -214,7 +214,7 @@ class FolderFile(models.Model):
     file = models.FileField(upload_to=get_file_path)
     original_filename = models.CharField(max_length=255)
     file_type = models.CharField(max_length=100)
-    file_size = models.BigIntegerField()  # Size in bytes
+    file_size = models.CharField(max_length=20)  # Store as string to avoid SQLite type issues
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
     uploaded_at = models.DateTimeField(auto_now_add=True)
     description = models.TextField(blank=True, null=True)
@@ -238,6 +238,13 @@ class FolderFile(models.Model):
         related_name='archived_folder_files'
     )
 
+    @property
+    def size_in_bytes(self):
+        try:
+            return int(self.file_size)
+        except (ValueError, TypeError):
+            return 0
+
     class Meta:
         ordering = ['-uploaded_at']
         indexes = [
@@ -249,18 +256,6 @@ class FolderFile(models.Model):
         if self.folder:
             return f"{self.original_filename} ({self.folder.title})"
         return f"{self.original_filename} (Temporary File)"
-
-    @property
-    def formatted_size(self):
-        if self.file_size is None or self.file_size == 0:
-            return "0 Bytes"
-        
-        import math
-        size_name = ("Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
-        i = int(math.floor(math.log(self.file_size, 1024)))
-        p = math.pow(1024, i)
-        s = round(self.file_size / p, 2)
-        return f"{s} {size_name[i]}"
 
     def delete(self, *args, **kwargs):
         # Soft delete

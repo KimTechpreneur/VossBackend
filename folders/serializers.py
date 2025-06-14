@@ -46,29 +46,15 @@ class RetentionClassSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'updated_at']
 
     def create(self, validated_data):
-        retention_period_str = validated_data.pop('retention_period')
-        if retention_period_str.upper() == 'PERMANENT':
-            # Handle "permanent" as a very long time, or a special state
-            # For simplicity, let's set it to 9999 days
-            validated_data['retention_period'] = '9999-01-01'
-        else:
-            validated_data['retention_period'] = parse_duration(retention_period_str)
-        
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        retention_period_str = validated_data.pop('retention_period', None)
-        if retention_period_str:
-            if retention_period_str.upper() == 'PERMANENT':
-                validated_data['retention_period'] = '9999-01-01'
-            else:
-                instance.retention_period = parse_duration(retention_period_str)
-
         return super().update(instance, validated_data)
 
 class FolderFileSerializer(serializers.ModelSerializer):
     formatted_size = serializers.CharField(read_only=True)
     folder = serializers.PrimaryKeyRelatedField(queryset=Folder.objects.all(), required=False)
+    file_size = serializers.CharField(required=False)
 
     class Meta:
         model = FolderFile
@@ -88,6 +74,32 @@ class FolderFileSerializer(serializers.ModelSerializer):
             'uploaded_by': {'required': False},
             'is_temporary': {'required': False},
         }
+
+    def validate_file_size(self, value):
+        try:
+            size = int(value)
+            if size < 0:
+                raise serializers.ValidationError("File size cannot be negative")
+            return str(size)
+        except (ValueError, TypeError):
+            return '0'
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        try:
+            size = int(instance.file_size)
+            if size == 0:
+                data['formatted_size'] = "0 Bytes"
+            else:
+                import math
+                size_name = ("Bytes", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+                i = int(math.floor(math.log(size, 1024)))
+                p = math.pow(1024, i)
+                s = round(size / p, 2)
+                data['formatted_size'] = f"{s} {size_name[i]}"
+        except (ValueError, TypeError):
+            data['formatted_size'] = "0 Bytes"
+        return data
 
 class FolderSignatureSerializer(serializers.ModelSerializer):
     class Meta:

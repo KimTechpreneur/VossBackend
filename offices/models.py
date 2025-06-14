@@ -1,6 +1,7 @@
 from django.db import models
 from django.conf import settings
 from django.utils import timezone
+from units.models import Unit
 import uuid
 
 class Office(models.Model):
@@ -20,6 +21,7 @@ class Office(models.Model):
     office_name = models.CharField(max_length=255)
     office_type = models.CharField(max_length=50, choices=OFFICE_TYPES)
     office_code = models.CharField(max_length=50, unique=True)
+    unit = models.ForeignKey(Unit, on_delete=models.CASCADE, related_name='offices', null=True, blank=True)
     head_of_office = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
