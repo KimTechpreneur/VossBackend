@@ -10,4 +10,4 @@ export DJANGO_SETTINGS_MODULE=VossBackend.settings
 export PYTHONPATH=$PYTHONPATH:$(pwd)
 
 # Run Daphne server
-daphne -b 0.0.0.0 -p 8000 VossBackend.asgi:application 
+python -m daphne -b 0.0.0.0 -p 8000 VossBackend.asgi:application 

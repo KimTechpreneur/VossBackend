@@ -10,8 +10,9 @@ def create_and_send_notification(user: User, title: str, message: str, notificat
     """
     Helper function to create a notification history item and send it via WebSocket.
     """
-    if not isinstance(user, User):
-        print(f"Warning: Recipient '{user}' is not a valid User object. Skipping notification.")
+    # Ensure we were given a valid, persisted User instance.
+    if not isinstance(user, User) or user.pk is None:
+        print(f"Warning: Recipient '{user}' is not a persisted User object. Skipping notification.")
         return
 
     # Create the in-app notification

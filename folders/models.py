@@ -131,6 +131,12 @@ class Folder(models.Model):
         blank=True,
         related_name='assigned_folders'
     )
+    watchers = models.ManyToManyField(
+        settings.AUTH_USER_MODEL,
+        related_name='watched_folders',
+        blank=True,
+        help_text="Users who want to receive notifications about this folder"
+    )
     requires_signature = models.BooleanField(default=False)
     is_signed = models.BooleanField(default=False)
     forwarding_comment = models.TextField(null=True, blank=True)
