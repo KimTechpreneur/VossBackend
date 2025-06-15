@@ -214,6 +214,13 @@ class AgentViewSet(viewsets.ModelViewSet):
                    search.lower() in agent['email'].lower()
             ]
 
+        # Filter for agents with profiles if requested
+        has_profile = request.query_params.get('has_profile', 'false').lower()
+        if has_profile == 'true':
+            hybrid_agents = [
+                agent for agent in hybrid_agents if agent.get('has_agent_profile')
+            ]
+
         # Apply status filtering
         status_filter = request.query_params.get('status', '')
         if status_filter and status_filter != 'all':
