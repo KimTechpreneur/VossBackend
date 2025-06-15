@@ -2,6 +2,7 @@ from django.db import models
 from django.utils import timezone
 from django.contrib.auth import get_user_model
 import uuid
+from django.conf import settings
 
 User = get_user_model()
 
@@ -181,3 +182,42 @@ class Transfer(models.Model):
 
     def can_be_rejected(self):
         return self.status == 'returned'
+
+class TransferComment(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transfer = models.ForeignKey(Transfer, on_delete=models.CASCADE, related_name='comments')
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='transfer_comments'
+    )
+    comment = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_internal = models.BooleanField(default=False)  # For internal notes vs. visible comments
+    parent_comment = models.ForeignKey(
+        'self',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='replies'
+    )
+    comment_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('general', 'General Comment'),
+            ('escalation', 'Escalation Note'),
+            ('return', 'Return Note'),
+            ('rejection', 'Rejection Note'),
+            ('revision', 'Revision Request'),
+            ('agent', 'Agent Note'),
+        ),
+        default='general'
+    )
+
+    def __str__(self):
+        return f"Comment by {self.user} on Transfer {self.transfer.id}"
+
+    class Meta:
+        ordering = ['-created_at']

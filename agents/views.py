@@ -144,98 +144,44 @@ class AgentViewSet(viewsets.ModelViewSet):
             return AgentUpgradeSerializer
         return AgentSerializer
 
+    @swagger_auto_schema(
+        operation_description="List all agents.",
+        manual_parameters=[
+            openapi.Parameter('status', openapi.IN_QUERY, description="Filter by agent status", type=openapi.TYPE_STRING),
+            openapi.Parameter('base_office', openapi.IN_QUERY, description="Filter by base office ID", type=openapi.TYPE_STRING),
+            openapi.Parameter('employment_type', openapi.IN_QUERY, description="Filter by employment type", type=openapi.TYPE_STRING),
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search by name, email, or agent ID", type=openapi.TYPE_STRING),
+        ],
+        responses={200: HybridAgentListSerializer(many=True)}
+    )
     def list(self, request, *args, **kwargs):
         """
-        Custom list method to show both full agents and users with agent role
+        Custom list method to show all agents.
+        This method uses the get_queryset for efficient, filtered database queries.
         """
-        # Get all users with Agent role
-        try:
-            agent_role = Role.objects.get(name='Agent')
-            agent_users = User.objects.filter(role=agent_role)
-        except Role.DoesNotExist:
-            agent_users = User.objects.none()
+        queryset = self.get_queryset()
 
-        hybrid_agents = []
-        
-        for user in agent_users:
-            # Check if user has an agent profile
-            has_agent_profile = hasattr(user, 'agent')
-            
-            # Get full name from first_name and last_name
-            full_name = f"{user.first_name} {user.last_name}".strip()
-            if not full_name:
-                full_name = user.email.split('@')[0]  # Fallback to email username
-            
-            if has_agent_profile:
-                agent = user.agent
-                hybrid_agent = {
-                    'id': str(agent.id),
-                    'name': full_name,
-                    'email': user.email,
-                    'phone': user.phone or '',
-                    'status': agent.status,
-                    'base_office': agent.base_office.office_name if agent.base_office else '',
-                    'employment_type': agent.employment_type,
-                    'joined_date': agent.joined_date,
-                    'last_activity': agent.last_activity,
-                    'deliveries_today': agent.deliveries_today,
-                    'success_rate': agent.success_rate,
-                    'initials': user.initials,
-                    'has_agent_profile': True,
-                    'user_id': str(user.id)
-                }
-            else:
-                # User with agent role but no profile
-                hybrid_agent = {
-                    'id': str(user.id),  # Use user ID for potential agents
-                    'name': full_name,
-                    'email': user.email,
-                    'phone': user.phone or '',
-                    'status': 'pending_setup',  # Special status for incomplete profiles
-                    'base_office': '',
-                    'employment_type': '',
-                    'joined_date': user.date_joined,
-                    'last_activity': user.last_login,
-                    'deliveries_today': 0,
-                    'success_rate': 0,
-                    'initials': user.initials,
-                    'has_agent_profile': False,
-                    'user_id': str(user.id)
-                }
-            
-            hybrid_agents.append(hybrid_agent)
+        response_data = []
+        for agent in queryset:
+            response_data.append({
+                'id': agent.id,
+                'name': f"{agent.user.first_name} {agent.user.last_name}",
+                'email': agent.user.email,
+                'phone': agent.user.phone,
+                'status': agent.status,
+                'base_office': agent.base_office.office_name if agent.base_office else None,
+                'employment_type': agent.employment_type,
+                'joined_date': agent.joined_date,
+                'last_activity': agent.last_activity,
+                'deliveries_today': agent.deliveries_today,
+                'success_rate': agent.success_rate,
+                'initials': agent.user.initials,
+                'has_agent_profile': True,
+                'user_id': agent.user.id
+            })
 
-        # Apply search filtering
-        search = request.query_params.get('search', '')
-        if search:
-            hybrid_agents = [
-                agent for agent in hybrid_agents
-                if search.lower() in agent['name'].lower() or 
-                   search.lower() in agent['email'].lower()
-            ]
-
-        # Filter for agents with profiles if requested
-        has_profile = request.query_params.get('has_profile', 'false').lower()
-        if has_profile == 'true':
-            hybrid_agents = [
-                agent for agent in hybrid_agents if agent.get('has_agent_profile')
-            ]
-
-        # Apply status filtering
-        status_filter = request.query_params.get('status', '')
-        if status_filter and status_filter != 'all':
-            hybrid_agents = [
-                agent for agent in hybrid_agents
-                if agent['status'] == status_filter
-            ]
-
-        # Pagination
-        page_size = int(request.query_params.get('page_size', 10))
-        page = int(request.query_params.get('page', 1))
-        start = (page - 1) * page_size
-        end = start + page_size
-        
-        paginated_agents = hybrid_agents[start:end]
+        serializer = HybridAgentListSerializer(response_data, many=True)
+        return Response(serializer.data)
         
         serializer = HybridAgentListSerializer(paginated_agents, many=True)
         
@@ -400,8 +346,33 @@ class AgentViewSet(viewsets.ModelViewSet):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     def get_queryset(self):
-        queryset = super().get_queryset()
-        
+        queryset = super().get_queryset().select_related('user', 'base_office')
+
+        # General search
+        search_query = self.request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(user__first_name__icontains=search_query) |
+                Q(user__last_name__icontains=search_query) |
+                Q(user__email__icontains=search_query) |
+                Q(agent_id__icontains=search_query)
+            )
+
+        # Filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        # Filter by base office
+        base_office_id = self.request.query_params.get('base_office')
+        if base_office_id:
+            queryset = queryset.filter(base_office_id=base_office_id)
+
+        # Filter by employment type
+        employment_type = self.request.query_params.get('employment_type')
+        if employment_type:
+            queryset = queryset.filter(employment_type=employment_type)
+
         # Filter by joined date range
         joined_date_from = self.request.query_params.get('joinedDateFrom')
         joined_date_to = self.request.query_params.get('joinedDateTo')

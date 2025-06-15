@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.utils import timezone
-from .models import Transfer, RoutingStep
+from .models import Transfer, RoutingStep, TransferComment
 import uuid
+from users.serializers import UserSerializer
 
 class RoutingStepSerializer(serializers.ModelSerializer):
     unit_office = serializers.SerializerMethodField()
@@ -74,7 +75,7 @@ class TransferSerializer(serializers.ModelSerializer):
     def get_agent(self, obj):
         if obj.agent:
             from users.serializers import UserSerializer
-            return UserSerializer(obj.agent).data
+            return UserSerializer(obj.agent.user).data
         return None
 
     def get_created_by(self, obj):
@@ -244,4 +245,27 @@ class ReturnRejectSerializer(serializers.Serializer):
     comments = serializers.CharField(required=False, allow_blank=True)
 
 class RevisionRequestSerializer(serializers.Serializer):
-    comments = serializers.CharField() 
+    comments = serializers.CharField()
+
+class TransferCommentSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TransferComment
+        fields = [
+            'id', 'transfer', 'user', 'comment', 'created_at', 
+            'updated_at', 'is_internal', 'parent_comment', 
+            'comment_type', 'replies'
+        ]
+        read_only_fields = ['user', 'created_at', 'updated_at']
+
+    def get_replies(self, obj):
+        if obj.parent_comment is None:  # Only get replies for parent comments
+            replies = obj.replies.all()
+            return TransferCommentSerializer(replies, many=True).data
+        return []
+
+    def create(self, validated_data):
+        validated_data['user'] = self.context['request'].user
+        return super().create(validated_data) 

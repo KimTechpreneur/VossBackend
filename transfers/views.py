@@ -5,10 +5,11 @@ from rest_framework.response import Response
 from django.utils import timezone
 from django.db.models import Q, Count, Avg
 from drf_yasg.utils import swagger_auto_schema
-from .models import Transfer, RoutingStep
+from .models import Transfer, RoutingStep, TransferComment
 from .serializers import (
     TransferSerializer, CreateTransferSerializer, BulkActionSerializer,
-    ReassignAgentSerializer, ReturnRejectSerializer, RevisionRequestSerializer
+    ReassignAgentSerializer, ReturnRejectSerializer, RevisionRequestSerializer,
+    TransferCommentSerializer
 )
 from rest_framework.permissions import IsAuthenticated
 from channels.layers import get_channel_layer
@@ -665,3 +666,47 @@ def mark_as_collected(request, transfer_id):
             }
         }
     )
+
+class TransferCommentViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing transfer comments.
+    
+    list:
+    Return a list of all transfer comments.
+    
+    create:
+    Create a new transfer comment.
+    
+    retrieve:
+    Return the details of a specific transfer comment.
+    
+    update:
+    Update all fields of a specific transfer comment.
+    
+    partial_update:
+    Update one or more fields of a specific transfer comment.
+    
+    destroy:
+    Delete a specific transfer comment.
+    """
+    queryset = TransferComment.objects.all()
+    serializer_class = TransferCommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        transfer_id = self.request.query_params.get('transfer_id', None)
+        is_internal = self.request.query_params.get('is_internal', None)
+        comment_type = self.request.query_params.get('comment_type', None)
+        
+        if transfer_id:
+            queryset = queryset.filter(transfer_id=transfer_id)
+        if is_internal is not None:
+            queryset = queryset.filter(is_internal=is_internal.lower() == 'true')
+        if comment_type:
+            queryset = queryset.filter(comment_type=comment_type)
+            
+        return queryset.select_related('transfer', 'user', 'parent_comment')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)

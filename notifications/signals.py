@@ -12,7 +12,7 @@ from django.utils import timezone
 # You would need to import the actual models involved in the events.
 # from transfers.models import FolderTransfer 
 
-from transfers.models import Transfer, RoutingStep
+from transfers.models import Transfer, RoutingStep, TransferComment
 from folders.models import Folder
 from .models import Notification, NotificationHistoryItem, User, NotificationTemplate
 from .serializers import NotificationHistoryItemSerializer
@@ -161,7 +161,7 @@ def _office_admins(office):
 def transfer_notification_handler(sender, instance, created, **kwargs):
     """Handle transfer-related notifications"""
     if created:
-        # Notify creator
+        # Notify creator (sender)
         create_notification(
             user=instance.created_by,
             title="Transfer Created",
@@ -171,7 +171,30 @@ def transfer_notification_handler(sender, instance, created, **kwargs):
             channels=['in_app', 'toast']
         )
         
-        # Notify receiving office
+        # Notify all users in routing steps
+        for step in instance.routing_steps.all():
+            # Notify the responsible user for this step
+            create_notification(
+                user=step.responsible_user,
+                title="New Transfer Assignment",
+                message=f"You have been assigned as responsible for a transfer of folder '{instance.folder.title}' from {instance.source_office.office_name}.",
+                notification_type='transfer',
+                reference_id=str(instance.id),
+                channels=['in_app', 'email', 'toast']
+            )
+
+        # Notify assigned agent if any
+        if instance.agent:
+            create_notification(
+                user=instance.agent.user,
+                title="New Transfer Assignment",
+                message=f"You have been assigned to handle the transfer of folder '{instance.folder.title}' from {instance.source_office.office_name} to {instance.destination_office.office_name}.",
+                notification_type='transfer',
+                reference_id=str(instance.id),
+                channels=['in_app', 'email', 'toast']
+            )
+        
+        # Notify receiving office admins
         for admin in _office_admins(instance.destination_office):
             create_notification(
                 user=admin,
@@ -184,12 +207,17 @@ def transfer_notification_handler(sender, instance, created, **kwargs):
     else:
         # Handle status changes
         if instance.status in ['completed', 'rejected', 'overdue']:
-            # Notify all involved parties
+            # Collect all involved parties
             recipients = {
-                instance.created_by,
-                *_office_admins(instance.destination_office),
-                *_office_admins(instance.source_office)
+                instance.created_by,  # Sender
+                *[step.responsible_user for step in instance.routing_steps.all()],  # All responsible users
+                *_office_admins(instance.destination_office),  # Destination office admins
+                *_office_admins(instance.source_office),  # Source office admins
             }
+            
+            # Add agent if assigned
+            if instance.agent:
+                recipients.add(instance.agent.user)
             
             status_message = {
                 'completed': 'has been completed',
@@ -198,14 +226,15 @@ def transfer_notification_handler(sender, instance, created, **kwargs):
             }[instance.status]
             
             for user in recipients:
-                create_notification(
-                    user=user,
-                    title=f"Transfer {instance.status.title()}",
-                    message=f"Transfer for folder '{instance.folder.title}' {status_message}.",
-                    notification_type='transfer',
-                    reference_id=str(instance.id),
-                    channels=['in_app', 'email']
-                )
+                if user:  # Check if user exists
+                    create_notification(
+                        user=user,
+                        title=f"Transfer {instance.status.title()}",
+                        message=f"Transfer for folder '{instance.folder.title}' {status_message}. From: {instance.source_office.office_name} To: {instance.destination_office.office_name}",
+                        notification_type='transfer',
+                        reference_id=str(instance.id),
+                        channels=['in_app', 'email']
+                    )
 
 @receiver(pre_save, sender=Transfer)
 def transfer_cancellation_handler(sender, instance, **kwargs):
@@ -231,9 +260,68 @@ def transfer_cancellation_handler(sender, instance, **kwargs):
                     channels=['in_app', 'email']
                 )
 
+@receiver(post_save, sender=TransferComment)
+def comment_notification_handler(sender, instance, created, **kwargs):
+    """Handle comment-related notifications"""
+    if created:
+        transfer = instance.transfer
+        comment_type = instance.comment_type
+        
+        # Get all recipients who should be notified
+        recipients = {
+            transfer.created_by,  # Transfer creator
+            instance.user,  # Comment author
+            *[step.responsible_user for step in transfer.routing_steps.all()],  # All responsible users
+            *_office_admins(transfer.destination_office),  # Destination office admins
+            *_office_admins(transfer.source_office),  # Source office admins
+        }
+        
+        # Add agent if assigned
+        if transfer.agent:
+            recipients.add(transfer.agent)
+        
+        # Add parent comment author if this is a reply
+        if instance.parent_comment and instance.parent_comment.user:
+            recipients.add(instance.parent_comment.user)
+        
+        # Remove the comment author from recipients
+        recipients.discard(instance.user)
+        
+        # Prepare notification message based on comment type
+        title_prefix = {
+            'general': 'New Comment',
+            'escalation': 'Transfer Escalation',
+            'return': 'Transfer Return Request',
+            'rejection': 'Transfer Rejection',
+            'revision': 'Revision Request',
+            'agent': 'Agent Note'
+        }.get(comment_type, 'New Comment')
+        
+        message_prefix = {
+            'general': 'commented on',
+            'escalation': 'escalated',
+            'return': 'requested return of',
+            'rejection': 'rejected',
+            'revision': 'requested revision for',
+            'agent': 'added a note to'
+        }.get(comment_type, 'commented on')
+        
+        # Send notifications to all recipients
+        for user in recipients:
+            if user:  # Check if user exists
+                create_notification(
+                    user=user,
+                    title=f"{title_prefix} on Transfer",
+                    message=f"{instance.user.get_full_name()} {message_prefix} transfer for folder '{transfer.folder.title}'.",
+                    notification_type='transfer_comment',
+                    reference_id=str(transfer.id),
+                    channels=['in_app', 'email', 'toast']
+                )
+
 def connect_signals():
     """Connect all notification signals"""
     post_save.connect(folder_notification_handler, sender=Folder)
     post_save.connect(transfer_notification_handler, sender=Transfer)
     pre_save.connect(transfer_cancellation_handler, sender=Transfer)
+    post_save.connect(comment_notification_handler, sender=TransferComment)
     print("Notification signals connected.")

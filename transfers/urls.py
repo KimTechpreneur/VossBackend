@@ -1,11 +1,13 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from . import views
+from .views import TransferViewSet, TransferCommentViewSet
 
 app_name = 'transfers'
 
 router = DefaultRouter()
-router.register(r'transfers', views.TransferViewSet, basename='transfer')
+router.register(r'transfers', TransferViewSet, basename='transfer')
+router.register(r'comments', TransferCommentViewSet, basename='transfer-comment')
 
 urlpatterns = [
     path('', include(router.urls)),
