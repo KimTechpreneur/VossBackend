@@ -388,6 +388,83 @@ class TransferViewSet(viewsets.ModelViewSet):
             404: "Transfer not found"
         }
     )
+    @action(detail=True, methods=['post'], url_path='pickup')
+    def pickup(self, request, pk=None):
+        """
+        Confirms that a transfer has been picked up.
+        """
+        transfer = self.get_object()
+        user = request.user
+
+        if transfer.status != 'submitted':
+            return Response({'error': 'Transfer cannot be picked up at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_agent = transfer.agent == user
+        is_creator = transfer.created_by == user
+
+        can_pickup = (
+            (transfer.delivery_method == 'agent' and is_agent) or
+            (transfer.delivery_method != 'agent' and is_creator)
+        )
+
+        if not can_pickup:
+            return Response({'error': 'You are not authorized to confirm pickup for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
+
+        transfer.status = 'in_transit'
+        transfer.picked_up_by = user
+        transfer.picked_up_at = timezone.now()
+        transfer.save()
+
+        create_and_send_notification(
+            user=user,
+            recipient=transfer.destination_office.members.all(),
+            title=f'Transfer In Transit: {transfer.id}',
+            message=f'Transfer {transfer.id} has been picked up by {user.get_full_name()} and is now in transit to {transfer.destination_office.name}.',
+            notification_type='transfer',
+            reference_id=transfer.id
+        )
+
+        serializer = self.get_serializer(transfer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'], url_path='delivery')
+    def delivery(self, request, pk=None):
+        """
+        Confirms that a transfer has been delivered.
+        """
+        transfer = self.get_object()
+        user = request.user
+
+        if transfer.status != 'in_transit':
+            return Response({'error': 'Transfer cannot be delivered at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        is_agent = transfer.agent == user
+        is_at_destination = user.office == transfer.destination_office
+
+        can_deliver = (
+            (transfer.delivery_method == 'agent' and is_agent) or
+            (transfer.delivery_method != 'agent' and is_at_destination)
+        )
+
+        if not can_deliver:
+            return Response({'error': 'You are not authorized to confirm delivery for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
+
+        transfer.status = 'completed'
+        transfer.completed_at = timezone.now()
+        transfer.save()
+
+        create_and_send_notification(
+            user=user,
+            recipient=transfer.created_by,
+            title=f'Transfer Delivered: {transfer.id}',
+            message=f'Transfer {transfer.id} has been successfully delivered to {transfer.destination_office.name} by {user.get_full_name()}.',
+            notification_type='transfer',
+            reference_id=transfer.id
+        )
+
+        serializer = self.get_serializer(transfer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @action(detail=True, methods=['post'])
     def request_revision(self, request, pk=None):
         transfer = self.get_object()
@@ -695,18 +772,18 @@ class TransferCommentViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         queryset = super().get_queryset()
-        transfer_id = self.request.query_params.get('transfer_id', None)
+        transfer_id = self.request.query_params.get('transfer', None)
         is_internal = self.request.query_params.get('is_internal', None)
-        comment_type = self.request.query_params.get('comment_type', None)
-        
+        comment_type = self.request.query_params.get('type', None)
+
         if transfer_id:
             queryset = queryset.filter(transfer_id=transfer_id)
         if is_internal is not None:
             queryset = queryset.filter(is_internal=is_internal.lower() == 'true')
         if comment_type:
             queryset = queryset.filter(comment_type=comment_type)
-            
-        return queryset.select_related('transfer', 'user', 'parent_comment')
+
+        return queryset.select_related('transfer', 'user', 'parent_comment').order_by('created_at')
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)

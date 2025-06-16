@@ -6,10 +6,10 @@ from .views import TransferViewSet, TransferCommentViewSet
 app_name = 'transfers'
 
 router = DefaultRouter()
-router.register(r'transfers', TransferViewSet, basename='transfer')
+router.register(r'', TransferViewSet, basename='transfer')
 router.register(r'comments', TransferCommentViewSet, basename='transfer-comment')
 
 urlpatterns = [
     path('', include(router.urls)),
-    path('transfers/<uuid:transfer_id>/mark-collected/', views.mark_as_collected, name='mark_as_collected'),
+            path('<uuid:transfer_id>/mark-collected/', views.mark_as_collected, name='mark_as_collected'),
 ] 
