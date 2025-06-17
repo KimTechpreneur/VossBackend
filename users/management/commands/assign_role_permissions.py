@@ -23,6 +23,7 @@ class Command(BaseCommand):
                 'View Folders', 'Create Folders', 'Edit Folders', 'Move Folders', 'Archive Folders',
                 # Transfer Management
                 'View Transfers', 'Create Transfers', 'Edit Transfers', 'Approve Transfers', 'Track Transfers',
+                'Handle Escalations', 'Manage Transfers',
                 # Dashboard & Reports
                 'View Dashboard', 'View Analytics', 'View Reports', 'Generate Reports', 'Export Data',
                 # Agent Management
@@ -37,6 +38,7 @@ class Command(BaseCommand):
                 'View Offices', 'View Users', 'View User Profiles',
                 'View Folders', 'Create Folders', 'Edit Folders',
                 'View Transfers', 'Create Transfers', 'Track Transfers',
+                'Handle Escalations', 'Manage Transfers',
                 'View Dashboard', 'View Reports',
                 'View Agents',
                 'View Units',

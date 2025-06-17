@@ -59,6 +59,8 @@ class Command(BaseCommand):
             {'name': 'Track Transfers', 'module': 'Transfer Management'},
             {'name': 'Bulk Transfer Operations', 'module': 'Transfer Management'},
             {'name': 'Confirm Transfer Delivery', 'module': 'Transfer Management'},
+            {'name': 'Handle Escalations', 'module': 'Transfer Management'},
+            {'name': 'Manage Transfers', 'module': 'Transfer Management'},
 
             # Dashboard & Analytics
             {'name': 'View Dashboard', 'module': 'Dashboard'},

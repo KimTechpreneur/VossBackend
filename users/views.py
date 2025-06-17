@@ -26,6 +26,7 @@ from .utils import (
 )
 from django.conf import settings
 from datetime import timedelta, datetime
+from django.db import models
 
 User = get_user_model()
 
@@ -132,6 +133,8 @@ class UserViewSet(viewsets.ModelViewSet):
             return [IsAdminUser()]
         elif self.action in ['update', 'partial_update', 'retrieve']:
             return [IsOwnerOrAdmin()]
+        elif self.action in ['escalation_targets']:
+            return [permissions.IsAuthenticated()]
         return [permissions.IsAuthenticated()]
 
     def get_queryset(self):
@@ -496,6 +499,42 @@ class UserViewSet(viewsets.ModelViewSet):
     def send_password_reset_email(self, user):
         # Implement password reset email sending
         pass
+
+    @swagger_auto_schema(
+        operation_description="Get users who can be escalation targets",
+        responses={
+            200: UserSerializer(many=True),
+            401: "Unauthorized"
+        }
+    )
+    @action(detail=False, methods=['get'])
+    def escalation_targets(self, request):
+        """
+        Returns a list of users who can be escalation targets.
+        These are users who:
+        1. Are active
+        2. Have appropriate roles/permissions
+        3. Are in the same office or higher level offices
+        """
+        user = request.user
+        user_office = user.office if hasattr(user, 'office') else None
+
+        # Get users with appropriate roles
+        queryset = User.objects.filter(
+            is_active=True,
+            roles__permissions__codename__in=['can_handle_escalations', 'can_manage_transfers']
+        ).distinct()
+
+        # If user has an office, filter by office hierarchy
+        if user_office:
+            queryset = queryset.filter(
+                models.Q(office=user_office) |  # Same office
+                models.Q(office__type__in=['Faculty-Level', 'Department-Level']) |  # Higher level offices
+                models.Q(is_staff=True)  # Staff users
+            )
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 class PasswordResetViewSet(viewsets.ModelViewSet):
     queryset = PasswordReset.objects.all()
