@@ -63,9 +63,12 @@ class Unit(models.Model):
 
     def update_ongoing_transfers(self):
         """Update the count of ongoing transfers for this unit."""
-        from folders.models import FolderTransfer
-        self.ongoing_transfers = FolderTransfer.objects.filter(
-            current_office=self,
-            status__in=['in_transit', 'awaiting_pickup']
+        from transfers.models import Transfer
+        # Get all offices belonging to this unit
+        office_ids = self.offices.values_list('id', flat=True)
+        # Count transfers where any of these offices is either source or destination
+        self.ongoing_transfers = Transfer.objects.filter(
+            models.Q(source_office_id__in=office_ids) | models.Q(destination_office_id__in=office_ids),
+            status__in=['in_transit', 'submitted']
         ).count()
         self.save(update_fields=['ongoing_transfers'])

@@ -53,6 +53,7 @@ class Transfer(models.Model):
         ('return_rejected', 'Return Rejected'),
         ('revision_requested', 'Revision Requested'),
         ('force_returned', 'Force Returned'),
+        ('archived', 'Archived'),
     ]
 
     DELIVERY_METHOD_CHOICES = [
@@ -78,6 +79,15 @@ class Transfer(models.Model):
         'offices.Office', 
         on_delete=models.PROTECT, 
         related_name='incoming_transfers'
+    )
+
+    # Escalation Information
+    escalated_to = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='escalated_transfers'
     )
 
     # Delivery Information
@@ -130,6 +140,9 @@ class Transfer(models.Model):
 
     class Meta:
         ordering = ['-created_at']
+        permissions = [
+            ('can_confirm_delivery', 'Can confirm transfer delivery'),
+        ]
 
     def __str__(self):
         return f"{self.id} - {self.folder.title}"

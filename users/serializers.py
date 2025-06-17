@@ -305,23 +305,34 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             'id', 'email', 'full_name', 'first_name', 'last_name', 
-            'roles', 'office', 'phone', 'employee_id', 'status',
-            'last_login', 'created_at'
+            'roles', 'office', 'phone', 'voss_id', 'status',
+            'last_login', 'created_at', 'office_location'
         ]
         read_only_fields = [
-            'id', 'email', 'roles', 'office', 'last_login', 'created_at'
+            'id', 'email', 'roles', 'office', 'last_login',
+            'created_at', 'voss_id'
         ]
 
     def get_roles(self, obj):
-        return [role.name for role in obj.roles.all()]
+        if obj.role:
+            return [{'id': obj.role.id, 'name': obj.role.name}]
+        return []
 
     def get_office(self, obj):
-        if hasattr(obj, 'office') and obj.office:
-            return {
-                'id': str(obj.office.id),
-                'office_name': obj.office.office_name,
-                'office_type': obj.office.office_type
-            }
+        if obj.unit:
+            # Get the first active office for this unit
+            from offices.models import Office
+            office = Office.objects.filter(
+                unit=obj.unit,
+                status='Active'
+            ).first()
+            if office:
+                return {
+                    'id': office.id,
+                    'name': office.office_name,
+                    'code': office.office_code,
+                    'type': office.office_type
+                }
         return None
 
     def get_full_name(self, obj):

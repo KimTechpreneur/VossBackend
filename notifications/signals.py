@@ -318,10 +318,52 @@ def comment_notification_handler(sender, instance, created, **kwargs):
                     channels=['in_app', 'email', 'toast']
                 )
 
+@receiver(pre_save, sender=Transfer)
+def transfer_status_change_handler(sender, instance, **kwargs):
+    """Handle notifications for transfer status changes"""
+    try:
+        # Get the old instance if it exists
+        old_instance = Transfer.objects.get(pk=instance.pk)
+        
+        # If status has changed
+        if old_instance.status != instance.status:
+            # Handle delivery status
+            if instance.status == 'delivered':
+                # Notify source office users
+                source_office_users = User.objects.filter(unit=instance.source_office.unit)
+                for user in source_office_users:
+                    create_notification(
+                        user=user,
+                        title=f'Transfer Delivered: {instance.id}',
+                        message=f'Transfer {instance.id} has been delivered to {instance.destination_office.office_name}',
+                        notification_type='transfer_delivery',
+                        reference_id=str(instance.id),
+                        channels=['in_app', 'email', 'toast']
+                    )
+                
+                # Notify transfer creator
+                if instance.created_by:
+                    create_notification(
+                        user=instance.created_by,
+                        title=f'Transfer Delivered: {instance.id}',
+                        message=f'Your transfer {instance.id} has been delivered to {instance.destination_office.office_name}',
+                        notification_type='transfer_delivery',
+                        reference_id=str(instance.id),
+                        channels=['in_app', 'email', 'toast']
+                    )
+
+    except Transfer.DoesNotExist:
+        # This is a new instance being created, ignore
+        pass
+    except Exception as e:
+        print(f"Error in transfer_status_change_handler: {str(e)}")
+        # Don't raise the exception to avoid blocking the save operation
+
 def connect_signals():
     """Connect all notification signals"""
     post_save.connect(folder_notification_handler, sender=Folder)
     post_save.connect(transfer_notification_handler, sender=Transfer)
     pre_save.connect(transfer_cancellation_handler, sender=Transfer)
     post_save.connect(comment_notification_handler, sender=TransferComment)
+    pre_save.connect(transfer_status_change_handler, sender=Transfer)
     print("Notification signals connected.")

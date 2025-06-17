@@ -7,13 +7,14 @@ class UserFilter(django_filters.FilterSet):
     role = django_filters.CharFilter(field_name='role__name')
     status = django_filters.CharFilter(field_name='status')
     department = django_filters.CharFilter(field_name='department__name')
+    unit = django_filters.CharFilter(field_name='unit__id')
     date_range_from = django_filters.DateTimeFilter(field_name='last_login', lookup_expr='gte')
     date_range_to = django_filters.DateTimeFilter(field_name='last_login', lookup_expr='lte')
     last_login = django_filters.DateFromToRangeFilter()
 
     class Meta:
         model = User
-        fields = ['role', 'status', 'department', 'last_login']
+        fields = ['role', 'status', 'department', 'unit', 'last_login']
 
     def __init__(self, *args, **kwargs):
         super(UserFilter, self).__init__(*args, **kwargs)

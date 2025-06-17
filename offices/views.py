@@ -14,6 +14,7 @@ from .serializers import (
     OfficeFolderSerializer, OfficeTransferSerializer
 )
 from users.permissions import IsAdminUser, IsOwnerOrAdmin
+from django.db.models import Q
 
 # Create your views here.
 
@@ -372,6 +373,58 @@ class OfficeViewSet(viewsets.ModelViewSet):
             'success': True,
             'message': f'User {user.get_full_name()} has been removed from {office.office_name}'
         })
+
+    @swagger_auto_schema(
+        operation_description="Get offices by unit with optional user filtering",
+        manual_parameters=[
+            openapi.Parameter(
+                'unit_id',
+                openapi.IN_QUERY,
+                description="ID of the unit to filter offices by",
+                type=openapi.TYPE_STRING,
+                required=True
+            ),
+            openapi.Parameter(
+                'user_id',
+                openapi.IN_QUERY,
+                description="Optional user ID to filter offices by user's permissions",
+                type=openapi.TYPE_STRING,
+                required=False
+            )
+        ],
+        responses={
+            200: OfficeSerializer(many=True),
+            400: "Bad Request",
+            404: "Unit not found"
+        }
+    )
+    @action(detail=False, methods=['get'])
+    def by_unit(self, request):
+        """Get offices by unit with optional user filtering"""
+        unit_id = request.query_params.get('unit_id')
+        user_id = request.query_params.get('user_id')
+        
+        if not unit_id:
+            return Response({'error': 'unit_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        queryset = self.get_queryset().filter(unit_id=unit_id)
+        
+        if user_id:
+            from users.models import User
+            try:
+                user = User.objects.get(id=user_id)
+                # If user is not a unit admin, filter by their permissions
+                if not user.is_unit_admin(unit_id):
+                    # Get offices where user is either head of office or staff member
+                    queryset = queryset.filter(
+                        Q(head_of_office=user) |
+                        Q(staff_members=user)
+                    ).distinct()
+            except User.DoesNotExist:
+                pass
+                
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
 
 
 class OfficeFolderViewSet(viewsets.ModelViewSet):

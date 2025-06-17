@@ -6,7 +6,7 @@ from asgiref.sync import async_to_sync
 import json
 from uuid import UUID
 
-def create_and_send_notification(user: User, title: str, message: str, notification_type: str, reference_id: str):
+def create_and_send_notification(user: User, title: str, message: str, notification_type: str, reference_id: str, object_id: str = None, object_type: str = None):
     """
     Helper function to create a notification history item and send it via WebSocket.
     """
@@ -21,7 +21,9 @@ def create_and_send_notification(user: User, title: str, message: str, notificat
         title=title,
         message=message,
         type=notification_type,
-        reference_id=reference_id
+        reference_id=str(reference_id) if reference_id else None,
+        object_id=str(object_id) if object_id else None,
+        object_type=object_type
     )
 
     # Send via WebSocket
@@ -33,7 +35,7 @@ def create_and_send_notification(user: User, title: str, message: str, notificat
         user_channel_group,
         {
             'type': 'send_notification',
-            'message': json.dumps(serializer.data)
+            'message': json_encode(serializer.data)
         }
     )
     print(f"Sent notification '{title}' to {user.email}")

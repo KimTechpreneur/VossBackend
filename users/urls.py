@@ -17,7 +17,7 @@ urlpatterns = [
     
     # User management endpoints
     path('', include(router.urls)),
-    path('profile/', UserProfileViewSet.as_view({
+    path('profile/current/', UserProfileViewSet.as_view({
         'get': 'retrieve', 
         'put': 'update', 
         'patch': 'partial_update'

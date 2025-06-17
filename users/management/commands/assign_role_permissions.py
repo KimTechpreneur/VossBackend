@@ -110,3 +110,41 @@ class Command(BaseCommand):
                 f'All roles have been configured with appropriate permissions.'
             )
         )
+
+        try:
+            with transaction.atomic():
+                # Get roles
+                global_admin = Role.objects.get(name='Global Admin')
+                unit_head = Role.objects.get(name='Unit Head')
+                staff = Role.objects.get(name='Staff')
+                agent = Role.objects.get(name='Agent')
+
+                # Get the confirm delivery permission
+                confirm_delivery_perm = Permission.objects.get(
+                    name='Confirm Transfer Delivery',
+                    module='Transfer Management'
+                )
+
+                # Assign the permission to appropriate roles
+                for role in [global_admin, unit_head, staff]:
+                    role.permissions.add(confirm_delivery_perm)
+                    self.stdout.write(
+                        self.style.SUCCESS(f'Added confirm delivery permission to {role.name}')
+                    )
+
+                self.stdout.write(
+                    self.style.SUCCESS('Successfully assigned confirm delivery permission to roles')
+                )
+
+        except Role.DoesNotExist as e:
+            self.stdout.write(
+                self.style.ERROR(f'Role not found: {str(e)}')
+            )
+        except Permission.DoesNotExist as e:
+            self.stdout.write(
+                self.style.ERROR(f'Permission not found: {str(e)}')
+            )
+        except Exception as e:
+            self.stdout.write(
+                self.style.ERROR(f'Error assigning permissions: {str(e)}')
+            )

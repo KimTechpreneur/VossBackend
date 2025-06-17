@@ -112,6 +112,8 @@ class NotificationHistoryItem(models.Model):
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='unread')
     reference_id = models.CharField(max_length=50, null=True, blank=True)
     file_link = models.URLField(null=True, blank=True)
+    object_id = models.CharField(max_length=50, null=True, blank=True)
+    object_type = models.CharField(max_length=50, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
