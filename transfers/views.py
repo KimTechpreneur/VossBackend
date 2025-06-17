@@ -202,39 +202,45 @@ class TransferViewSet(viewsets.ModelViewSet):
     )
     @action(detail=True, methods=['post'])
     def delivery(self, request, pk=None):
+        """
+        Confirms that a transfer has been delivered to the destination office.
+        """
         transfer = self.get_object()
         user = request.user
 
         if transfer.status != 'in_transit':
-            return Response({'error': 'Transfer cannot be delivered at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Transfer cannot be delivered at this stage.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        is_agent = transfer.agent == user
-        is_at_destination = user.office == transfer.destination_office
+        # Check if user is at destination office
+        if not user.office or user.office.id != transfer.destination_office.id:
+            return Response(
+                {'error': 'Only users in the destination office can confirm delivery.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
-        can_deliver = (
-            (transfer.delivery_method == 'agent' and is_agent) or
-            (transfer.delivery_method != 'agent' and is_at_destination)
-        )
-
-        if not can_deliver:
-            return Response({'error': 'You are not authorized to confirm delivery for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
-
-        transfer.status = 'completed'
-        transfer.completed_at = timezone.now()
+        transfer.status = 'delivered'
+        transfer.delivered_at = timezone.now()
+        transfer.delivered_by = user
         transfer.save()
 
-        if transfer.source_office and transfer.source_office.members.exists():
+        # Notify source office users
+        from users.models import User
+        source_office_users = User.objects.filter(office=transfer.source_office)
+        if source_office_users.exists():
             create_and_send_notification(
                 user=user,
-                recipient=transfer.source_office.members.all(),
+                recipient=source_office_users,
                 title=f'Transfer Delivered: {transfer.id}',
-                message=f'Transfer {transfer.id} has been successfully delivered to {transfer.destination_office.name} by {user.get_full_name()}.',
-                notification_type='transfer',
-                reference_id=transfer.id
+                message=f'Transfer {transfer.id} has been delivered to {transfer.destination_office.office_name}',
+                notification_type='transfer_delivery',
+                related_object=transfer
             )
 
         serializer = self.get_serializer(transfer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(serializer.data)
 
     @swagger_auto_schema(
         operation_description="Confirms that a transfer has been picked up.",
@@ -254,7 +260,10 @@ class TransferViewSet(viewsets.ModelViewSet):
         user = request.user
 
         if transfer.status != 'submitted':
-            return Response({'error': 'Transfer cannot be picked up at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'error': 'Transfer cannot be picked up at this stage.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
         is_agent = transfer.agent == user
         is_creator = transfer.created_by == user
@@ -265,14 +274,17 @@ class TransferViewSet(viewsets.ModelViewSet):
         )
 
         if not can_pickup:
-            return Response({'error': 'You are not authorized to confirm pickup for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
+            return Response(
+                {'error': 'You are not authorized to confirm pickup for this transfer.'},
+                status=status.HTTP_403_FORBIDDEN
+            )
 
         transfer.status = 'in_transit'
         transfer.picked_up_by = user
         transfer.picked_up_at = timezone.now()
         transfer.save()
 
-        # Find users assigned to the destination office
+        # Notify destination office users about the pickup
         from users.models import User
         destination_office_users = User.objects.filter(office=transfer.destination_office)
         
@@ -281,7 +293,7 @@ class TransferViewSet(viewsets.ModelViewSet):
                 user=user,
                 recipient=destination_office_users,
                 title=f'Transfer In Transit: {transfer.id}',
-                message=f'Transfer {transfer.id} has been picked up and is now in transit.',
+                message=f'Transfer {transfer.id} has been picked up and is now in transit. Please prepare to receive it.',
                 notification_type='transfer_pickup',
                 related_object=transfer
             )
@@ -302,7 +314,8 @@ class TransferViewSet(viewsets.ModelViewSet):
             }
         )
 
-        return Response(TransferSerializer(transfer).data)
+        serializer = self.get_serializer(transfer)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def request_revision(self, request, pk=None):

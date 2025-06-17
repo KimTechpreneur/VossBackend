@@ -297,17 +297,32 @@ class UserBulkUpdateSerializer(serializers.Serializer):
         return data
 
 class UserProfileSerializer(serializers.ModelSerializer):
-    role = RoleSerializer(read_only=True)
-    initials = serializers.CharField(read_only=True)
+    roles = serializers.SerializerMethodField()
+    office = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = [
-            'id', 'email', 'first_name', 'last_name', 'phone', 'role',
-            'status', 'voss_id', 'office_location',
-            'notes', 'last_login', 'initials', 'created_at', 'updated_at'
+            'id', 'email', 'full_name', 'first_name', 'last_name', 
+            'roles', 'office', 'phone', 'employee_id', 'status',
+            'last_login', 'created_at'
         ]
         read_only_fields = [
-            'id', 'email', 'role', 'status', 'last_login',
-            'created_at', 'updated_at', 'initials'
-        ] 
+            'id', 'email', 'roles', 'office', 'last_login', 'created_at'
+        ]
+
+    def get_roles(self, obj):
+        return [role.name for role in obj.roles.all()]
+
+    def get_office(self, obj):
+        if hasattr(obj, 'office') and obj.office:
+            return {
+                'id': str(obj.office.id),
+                'office_name': obj.office.office_name,
+                'office_type': obj.office.office_type
+            }
+        return None
+
+    def get_full_name(self, obj):
+        return obj.get_full_name()

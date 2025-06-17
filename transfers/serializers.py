@@ -49,14 +49,14 @@ class TransferSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'folder', 'source_office', 'destination_office',
             'delivery_method', 'agent', 'agent_notes', 'priority',
-            'tags', 'notifications', 'status', 'created_at',
+            'tags', 'notifications', 'status', 'created_at', 'updated_at',
             'created_by', 'submitted_at', 'completed_at', 'due_date',
             'return_reason', 'return_notes', 'returned_at', 'returned_by',
             'routing_steps', 'current_step', 'next_step', 'is_overdue',
             'history'
         ]
         read_only_fields = [
-            'id', 'created_at', 'created_by', 'submitted_at',
+            'id', 'created_at', 'updated_at', 'created_by', 'submitted_at',
             'completed_at', 'returned_at', 'returned_by', 'history'
         ]
 
@@ -268,4 +268,4 @@ class TransferCommentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         validated_data['user'] = self.context['request'].user
-        return super().create(validated_data) 
+        return super().create(validated_data)
