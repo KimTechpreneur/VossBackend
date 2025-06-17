@@ -192,203 +192,60 @@ class TransferViewSet(viewsets.ModelViewSet):
         return Response(transfer.history)
 
     @swagger_auto_schema(
-        operation_description="Recall a transfer",
+        operation_description="Confirms that a transfer has been delivered.",
         responses={
-            200: "Transfer recalled successfully",
+            200: TransferSerializer(),
+            400: "Transfer cannot be delivered at this stage.",
+            403: "You are not authorized to confirm delivery for this transfer.",
             404: "Transfer not found"
         }
     )
     @action(detail=True, methods=['post'])
-    def recall(self, request, pk=None):
-        transfer = self.get_object()
-        if not transfer.can_be_recalled():
-            return Response(
-                {"error": "Transfer cannot be recalled in its current state"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        transfer.status = 'recalled'
-        transfer.save()
-        return Response({'status': 'transfer recalled'})
-
-    @swagger_auto_schema(
-        operation_description="Escalate a transfer",
-        responses={
-            200: "Transfer escalated successfully",
-            404: "Transfer not found"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def escalate(self, request, pk=None):
-        transfer = self.get_object()
-        if not transfer.can_be_escalated():
-            return Response(
-                {"error": "Transfer cannot be escalated in its current state"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        transfer.status = 'escalated'
-        transfer.save()
-        return Response({'status': 'transfer escalated'})
-
-    @swagger_auto_schema(
-        operation_description="Reassign agent for a transfer",
-        request_body=ReassignAgentSerializer,
-        responses={
-            200: TransferSerializer,
-            404: "Transfer not found"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def reassign_agent(self, request, pk=None):
-        transfer = self.get_object()
-        serializer = ReassignAgentSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        transfer.agent_id = serializer.validated_data['new_agent_id']
-        if 'agent_notes' in serializer.validated_data:
-            transfer.agent_notes = serializer.validated_data['agent_notes']
-        transfer.save()
-        
-        return Response(self.get_serializer(transfer).data)
-
-    @swagger_auto_schema(
-        operation_description="Force return a transfer",
-        responses={
-            200: "Transfer force returned successfully",
-            404: "Transfer not found"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def force_return(self, request, pk=None):
-        transfer = self.get_object()
-        if not transfer.can_be_returned():
-            return Response(
-                {"error": "Transfer cannot be returned in its current state"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        transfer.status = 'force_returned'
-        transfer.returned_at = timezone.now()
-        transfer.returned_by = request.user
-        transfer.save()
-        return Response({'status': 'transfer force returned'})
-
-    @swagger_auto_schema(
-        operation_description="Approve return of a transfer",
-        responses={
-            200: "Transfer return approved successfully",
-            404: "Transfer not found"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def approve_return(self, request, pk=None):
-        transfer = self.get_object()
-        if not transfer.can_be_approved():
-            return Response(
-                {"error": "Transfer cannot be approved in its current state"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        transfer.status = 'return_approved'
-        transfer.save()
-        return Response({'status': 'transfer return approved'})
-
-    @swagger_auto_schema(
-        operation_description="Reject return of a transfer",
-        request_body=ReturnRejectSerializer,
-        responses={
-            200: "Transfer return rejected successfully",
-            404: "Transfer not found"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def reject_return(self, request, pk=None):
-        transfer = self.get_object()
-        if not transfer.can_be_rejected():
-            return Response(
-                {"error": "Transfer cannot be rejected in its current state"},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        serializer = ReturnRejectSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        
-        transfer.status = 'return_rejected'
-        transfer.return_reason = serializer.validated_data['reason']
-        if 'comments' in serializer.validated_data:
-            transfer.return_notes = serializer.validated_data['comments']
-        transfer.save()
-        
-        return Response({'status': 'transfer return rejected'})
-
-    @swagger_auto_schema(
-        operation_description="Scan a transfer QR code",
-        responses={
-            200: "Transfer scanned successfully",
-            404: "Transfer not found",
-            400: "Invalid QR code or transfer status"
-        }
-    )
-    @action(detail=True, methods=['post'])
-    def scan(self, request, pk=None):
-        """
-        Handles the scanning of a transfer's QR code for pickup or delivery.
-        """
+    def delivery(self, request, pk=None):
         transfer = self.get_object()
         user = request.user
 
-        # Agent pickup
-        if transfer.status == 'submitted' and transfer.agent == user:
-            transfer.status = 'in_transit'
-            transfer.save()
-            # Notify the creator that the agent has picked up the transfer
-            create_and_send_notification(
-                user=transfer.created_by,
-                title="Transfer Picked Up",
-                message=f"Agent {user.get_full_name()} has picked up transfer '{transfer.folder.title}'.",
-                notification_type='transfer_update',
-                reference_id=str(transfer.id)
-            )
-            return Response({'status': 'pickup_confirmed'})
+        if transfer.status != 'in_transit':
+            return Response({'error': 'Transfer cannot be delivered at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Recipient delivery
-        if transfer.status == 'in_transit' and transfer.destination_office in user.office_set.all():
-            transfer.status = 'delivered'
-            transfer.completed_at = timezone.now()
-            transfer.save()
-            # Notify the creator and agent that the transfer has been delivered
-            create_and_send_notification(
-                user=transfer.created_by,
-                title="Transfer Delivered",
-                message=f"Transfer '{transfer.folder.title}' has been successfully delivered to {transfer.destination_office.office_name}.",
-                notification_type='transfer_update',
-                reference_id=str(transfer.id)
-            )
-            if transfer.agent:
-                create_and_send_notification(
-                    user=transfer.agent,
-                    title="Transfer Delivered",
-                    message=f"Your assigned transfer '{transfer.folder.title}' has been delivered.",
-                    notification_type='transfer_update',
-                    reference_id=str(transfer.id)
-                )
-            return Response({'status': 'delivery_confirmed'})
+        is_agent = transfer.agent == user
+        is_at_destination = user.office == transfer.destination_office
 
-        return Response(
-            {"error": "This QR code is not valid for the current transfer status or user."},
-            status=status.HTTP_400_BAD_REQUEST
+        can_deliver = (
+            (transfer.delivery_method == 'agent' and is_agent) or
+            (transfer.delivery_method != 'agent' and is_at_destination)
         )
 
+        if not can_deliver:
+            return Response({'error': 'You are not authorized to confirm delivery for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
+
+        transfer.status = 'completed'
+        transfer.completed_at = timezone.now()
+        transfer.save()
+
+        if transfer.source_office and transfer.source_office.members.exists():
+            create_and_send_notification(
+                user=user,
+                recipient=transfer.source_office.members.all(),
+                title=f'Transfer Delivered: {transfer.id}',
+                message=f'Transfer {transfer.id} has been successfully delivered to {transfer.destination_office.name} by {user.get_full_name()}.',
+                notification_type='transfer',
+                reference_id=transfer.id
+            )
+
+        serializer = self.get_serializer(transfer)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
     @swagger_auto_schema(
-        operation_description="Request revision of a transfer",
-        request_body=RevisionRequestSerializer,
+        operation_description="Confirms that a transfer has been picked up.",
         responses={
-            200: "Transfer revision requested successfully",
+            200: TransferSerializer(),
+            400: "Transfer cannot be picked up at this stage.",
+            403: "You are not authorized to confirm pickup for this transfer.",
             404: "Transfer not found"
         }
     )
-    @action(detail=True, methods=['post'], url_path='pickup')
+    @action(detail=True, methods=['post'])
     def pickup(self, request, pk=None):
         """
         Confirms that a transfer has been picked up.
@@ -415,55 +272,37 @@ class TransferViewSet(viewsets.ModelViewSet):
         transfer.picked_up_at = timezone.now()
         transfer.save()
 
-        create_and_send_notification(
-            user=user,
-            recipient=transfer.destination_office.members.all(),
-            title=f'Transfer In Transit: {transfer.id}',
-            message=f'Transfer {transfer.id} has been picked up by {user.get_full_name()} and is now in transit to {transfer.destination_office.name}.',
-            notification_type='transfer',
-            reference_id=transfer.id
+        # Find users assigned to the destination office
+        from users.models import User
+        destination_office_users = User.objects.filter(office=transfer.destination_office)
+        
+        if destination_office_users.exists():
+            create_and_send_notification(
+                user=user,
+                recipient=destination_office_users,
+                title=f'Transfer In Transit: {transfer.id}',
+                message=f'Transfer {transfer.id} has been picked up and is now in transit.',
+                notification_type='transfer_pickup',
+                related_object=transfer
+            )
+
+        # Broadcast the update via WebSocket
+        channel_layer = get_channel_layer()
+        async_to_sync(channel_layer.group_send)(
+            'transfers',
+            {
+                'type': 'transfer_update',
+                'data': {
+                    'id': transfer.id,
+                    'status': transfer.status,
+                    'picked_up_by': transfer.picked_up_by.email,
+                    'picked_up_at': transfer.picked_up_at.isoformat(),
+                    'action': 'pickup'
+                }
+            }
         )
 
-        serializer = self.get_serializer(transfer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
-
-    @action(detail=True, methods=['post'], url_path='delivery')
-    def delivery(self, request, pk=None):
-        """
-        Confirms that a transfer has been delivered.
-        """
-        transfer = self.get_object()
-        user = request.user
-
-        if transfer.status != 'in_transit':
-            return Response({'error': 'Transfer cannot be delivered at this stage.'}, status=status.HTTP_400_BAD_REQUEST)
-
-        is_agent = transfer.agent == user
-        is_at_destination = user.office == transfer.destination_office
-
-        can_deliver = (
-            (transfer.delivery_method == 'agent' and is_agent) or
-            (transfer.delivery_method != 'agent' and is_at_destination)
-        )
-
-        if not can_deliver:
-            return Response({'error': 'You are not authorized to confirm delivery for this transfer.'}, status=status.HTTP_403_FORBIDDEN)
-
-        transfer.status = 'completed'
-        transfer.completed_at = timezone.now()
-        transfer.save()
-
-        create_and_send_notification(
-            user=user,
-            recipient=transfer.created_by,
-            title=f'Transfer Delivered: {transfer.id}',
-            message=f'Transfer {transfer.id} has been successfully delivered to {transfer.destination_office.name} by {user.get_full_name()}.',
-            notification_type='transfer',
-            reference_id=transfer.id
-        )
-
-        serializer = self.get_serializer(transfer)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        return Response(TransferSerializer(transfer).data)
 
     @action(detail=True, methods=['post'])
     def request_revision(self, request, pk=None):

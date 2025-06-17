@@ -7,9 +7,21 @@ app_name = 'transfers'
 
 router = DefaultRouter()
 router.register(r'', TransferViewSet, basename='transfer')
-router.register(r'comments', TransferCommentViewSet, basename='transfer-comment')
+
+comment_list = TransferCommentViewSet.as_view({
+    'get': 'list',
+    'post': 'create'
+})
+comment_detail = TransferCommentViewSet.as_view({
+    'get': 'retrieve',
+    'put': 'update',
+    'patch': 'partial_update',
+    'delete': 'destroy'
+})
 
 urlpatterns = [
+    path('comments/', comment_list, name='transfer-comment-list'),
+    path('comments/<uuid:pk>/', comment_detail, name='transfer-comment-detail'),
+    path('<uuid:transfer_id>/mark-collected/', views.mark_as_collected, name='mark_as_collected'),
     path('', include(router.urls)),
-            path('<uuid:transfer_id>/mark-collected/', views.mark_as_collected, name='mark_as_collected'),
-] 
+]
