@@ -384,6 +384,33 @@ class AgentViewSet(viewsets.ModelViewSet):
             
         return queryset
 
+    @swagger_auto_schema(
+        operation_description="Get list of available agents for assignment to transfers",
+        responses={
+            200: "List of available agents",
+        }
+    )
+    @action(detail=False, methods=['get'])
+    def available(self, request):
+        """
+        Get list of available agents for assignment to transfers.
+        This will only return users with a full agent profile.
+        """
+        # We only want to list agents that have a full profile and are available
+        available_agents = Agent.objects.filter(status='available').select_related('user', 'base_office')
+        
+        response_data = []
+        for agent in available_agents:
+            response_data.append({
+                'id': str(agent.id),
+                'name': f"{agent.user.first_name} {agent.user.last_name}",
+                'status': agent.status,
+                'baseOffice': agent.base_office.office_name if agent.base_office else '',
+                'successRate': agent.success_rate
+            })
+        
+        return Response(response_data)
+
     @action(detail=False, methods=['get'])
     def stats(self, request):
         """

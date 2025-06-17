@@ -93,7 +93,7 @@ class Transfer(models.Model):
     # Delivery Information
     delivery_method = models.CharField(max_length=10, choices=DELIVERY_METHOD_CHOICES)
     agent = models.ForeignKey(
-        User, 
+        'agents.Agent', 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
