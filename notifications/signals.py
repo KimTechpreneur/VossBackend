@@ -277,8 +277,8 @@ def comment_notification_handler(sender, instance, created, **kwargs):
         }
         
         # Add agent if assigned
-        if transfer.agent:
-            recipients.add(transfer.agent)
+        if transfer.agent and transfer.agent.user:
+            recipients.add(transfer.agent.user)
         
         # Add parent comment author if this is a reply
         if instance.parent_comment and instance.parent_comment.user:

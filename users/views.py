@@ -500,40 +500,18 @@ class UserViewSet(viewsets.ModelViewSet):
         # Implement password reset email sending
         pass
 
-    @swagger_auto_schema(
-        operation_description="Get users who can be escalation targets",
-        responses={
-            200: UserSerializer(many=True),
-            401: "Unauthorized"
-        }
-    )
     @action(detail=False, methods=['get'])
     def escalation_targets(self, request):
         """
-        Returns a list of users who can be escalation targets.
-        These are users who:
-        1. Are active
-        2. Have appropriate roles/permissions
-        3. Are in the same office or higher level offices
+        Returns a list of users who can be targets for escalation.
         """
-        user = request.user
-        user_office = user.office if hasattr(user, 'office') else None
-
-        # Get users with appropriate roles
-        queryset = User.objects.filter(
-            is_active=True,
-            roles__permissions__codename__in=['can_handle_escalations', 'can_manage_transfers']
+        # Filter users who have escalation-related permissions
+        users = User.objects.filter(
+            is_active=True, 
+            status='Active',
+            role__permissions__name__in=['Handle Escalations', 'Manage Transfers']
         ).distinct()
-
-        # If user has an office, filter by office hierarchy
-        if user_office:
-            queryset = queryset.filter(
-                models.Q(office=user_office) |  # Same office
-                models.Q(office__type__in=['Faculty-Level', 'Department-Level']) |  # Higher level offices
-                models.Q(is_staff=True)  # Staff users
-            )
-
-        serializer = self.get_serializer(queryset, many=True)
+        serializer = self.get_serializer(users, many=True)
         return Response(serializer.data)
 
 class PasswordResetViewSet(viewsets.ModelViewSet):

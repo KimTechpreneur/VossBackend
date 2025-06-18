@@ -246,7 +246,7 @@ class TransferViewSet(viewsets.ModelViewSet):
                 (user_office and user_office == transfer.destination_office and
                  request.user.has_perm('transfers.can_confirm_delivery')) or
                 # Or user is the assigned agent
-                (transfer.delivery_method == 'agent' and transfer.agent == request.user)
+                (transfer.delivery_method == 'agent' and transfer.agent and transfer.agent.user == request.user)
             )
         
         if not is_authorized:
@@ -302,9 +302,9 @@ class TransferViewSet(viewsets.ModelViewSet):
                     )
 
                 # 2. Notify the agent if it's an agent delivery
-                if transfer.delivery_method == 'agent' and transfer.agent:
+                if transfer.delivery_method == 'agent' and transfer.agent and transfer.agent.user:
                     create_and_send_notification(
-                        user=transfer.agent,
+                        user=transfer.agent.user,
                         title=f'Transfer Delivered: {str(transfer.id)}',
                         message=f'Transfer has been delivered by {request.user.get_full_name()}',
                         notification_type='transfer_delivered',
@@ -312,9 +312,12 @@ class TransferViewSet(viewsets.ModelViewSet):
                     )
 
                 # 3. Notify users in the source office
+                exclude_ids = [transfer.created_by.id if transfer.created_by else None]
+                if transfer.agent and transfer.agent.user:
+                    exclude_ids.append(transfer.agent.user.id)
+                
                 source_users = User.objects.filter(unit=transfer.source_office.unit).exclude(
-                    id__in=[transfer.created_by.id if transfer.created_by else None,
-                           transfer.agent.id if transfer.agent else None]
+                    id__in=[id for id in exclude_ids if id is not None]
                 ).distinct()
 
                 for user in source_users:
@@ -353,61 +356,44 @@ class TransferViewSet(viewsets.ModelViewSet):
         Confirms that a transfer has been picked up.
         """
         transfer = self.get_object()
-        user = request.user
-
+        
+        # Check if transfer can be picked up
         if transfer.status != 'submitted':
             return Response(
-                {'error': 'Transfer cannot be picked up at this stage.'},
+                {"detail": "Transfer cannot be picked up at this stage."},
                 status=status.HTTP_400_BAD_REQUEST
             )
-
-        is_agent = transfer.agent == user
-        is_creator = transfer.created_by == user
-
-        can_pickup = (
-            (transfer.delivery_method == 'agent' and is_agent) or
-            (transfer.delivery_method != 'agent' and is_creator)
-        )
-
-        if not can_pickup:
+            
+        # Check if the user is authorized to pick up the transfer
+        is_creator = transfer.created_by == request.user
+        is_agent = transfer.delivery_method == 'agent' and transfer.agent and transfer.agent.user == request.user
+        
+        if not (is_creator or is_agent):
             return Response(
-                {'error': 'You are not authorized to confirm pickup for this transfer.'},
+                {"detail": "You are not authorized to confirm pickup for this transfer."},
                 status=status.HTTP_403_FORBIDDEN
             )
-
-        transfer.status = 'in_transit'
-        transfer.picked_up_by = user
-        transfer.picked_up_at = timezone.now()
-        transfer.save()
-
-        # Notify destination office users about the pickup
-        destination_office_users = User.objects.filter(unit=transfer.destination_office.unit)
-        
-        if destination_office_users.exists():
+            
+        with transaction.atomic():
+            transfer.status = 'in_transit'
+            transfer.save()
+            
+            # Record history
+            transfer.history.append({
+                'timestamp': timezone.now().isoformat(),
+                'action': 'picked_up',
+                'user_id': str(request.user.id)
+            })
+            transfer.save()
+            
+            # Send notification
             create_and_send_notification(
-                user=user,
-                recipient=destination_office_users,
-                title=f'Transfer In Transit: {transfer.id}',
-                message=f'Transfer {transfer.id} has been picked up and is now in transit. Please prepare to receive it.',
-                notification_type='transfer_pickup',
-                related_object=transfer
+                user=transfer.created_by,
+                title=f'Transfer Picked Up: {transfer.id}',
+                message=f'Transfer {transfer.id} has been picked up by {request.user.get_full_name()}.',
+                notification_type='transfer_picked_up',
+                reference_id=str(transfer.id),
             )
-
-        # Broadcast the update via WebSocket
-        channel_layer = get_channel_layer()
-        async_to_sync(channel_layer.group_send)(
-            'transfers',
-            {
-                'type': 'transfer_update',
-                'data': json_encode({
-                    'id': str(transfer.id),
-                    'status': transfer.status,
-                    'picked_up_by': transfer.picked_up_by.email,
-                    'picked_up_at': transfer.picked_up_at.isoformat(),
-                    'action': 'pickup'
-                })
-            }
-        )
 
         serializer = self.get_serializer(transfer)
         return Response(serializer.data)
@@ -431,8 +417,7 @@ class TransferViewSet(viewsets.ModelViewSet):
                         title=f'Revision Requested: Transfer {transfer.id}',
                         message=f'A revision has been requested for your transfer {transfer.id}. Comments: {transfer.return_notes}',
                         notification_type='transfer_revision',
-                        reference_id=str(transfer.id),
-                        channels=['in_app', 'email', 'toast']
+                        reference_id=str(transfer.id)
                     )
 
                 # Notify source office users
@@ -445,8 +430,7 @@ class TransferViewSet(viewsets.ModelViewSet):
                                 title=f'Revision Requested: Transfer {transfer.id}',
                                 message=f'A revision has been requested for transfer {transfer.id}. Comments: {transfer.return_notes}',
                                 notification_type='transfer_revision',
-                                reference_id=str(transfer.id),
-                                channels=['in_app', 'email', 'toast']
+                                reference_id=str(transfer.id)
                             )
 
                 # Broadcast the update via WebSocket
@@ -957,7 +941,7 @@ def mark_as_collected(request, transfer_id):
         {
             'type': 'transfer_update',
             'data': {
-                'id': transfer.id,
+                'id': str(transfer.id),
                 'status': transfer.status,
                 'collected_by': transfer.collected_by.email,
                 'collected_at': transfer.collected_at.isoformat(),
