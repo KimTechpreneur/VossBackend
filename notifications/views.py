@@ -136,13 +136,22 @@ class NotificationHistoryItemViewSet(viewsets.ModelViewSet):
     )
     @action(detail=False, methods=['post'])
     def bulk_update(self, request):
-        serializer = self.get_serializer(data=request.data, many=True)
+        serializer = NotificationBulkUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        self.perform_bulk_update(serializer)
-        return Response(serializer.data)
-    
-    def perform_bulk_update(self, serializer):
-        serializer.save()
+        
+        notification_ids = serializer.validated_data['notification_ids']
+        status = serializer.validated_data.get('status')
+        
+        # Update notifications for the current user
+        updated_count = NotificationHistoryItem.objects.filter(
+            user=request.user,
+            id__in=notification_ids
+        ).update(status=status)
+        
+        return Response({
+            'status': f'bulk update completed',
+            'updated_count': updated_count
+        })
 
     @swagger_auto_schema(
         operation_description="Mark a notification as read",
@@ -154,7 +163,7 @@ class NotificationHistoryItemViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def mark_read(self, request, pk=None):
         notification = self.get_object()
-        notification.is_read = True
+        notification.status = 'read'
         notification.save()
         return Response({'status': 'notification marked as read'})
 
@@ -168,9 +177,28 @@ class NotificationHistoryItemViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def mark_unread(self, request, pk=None):
         notification = self.get_object()
-        notification.is_read = False
+        notification.status = 'unread'
         notification.save()
         return Response({'status': 'notification marked as unread'})
+
+    @swagger_auto_schema(
+        operation_description="Mark all notifications as read for the current user",
+        responses={
+            200: "All notifications marked as read successfully",
+            401: "Unauthorized"
+        }
+    )
+    @action(detail=False, methods=['post'])
+    def mark_all_read(self, request):
+        user = request.user
+        updated_count = NotificationHistoryItem.objects.filter(
+            user=user, 
+            status='unread'
+        ).update(status='read')
+        return Response({
+            'status': 'all notifications marked as read',
+            'updated_count': updated_count
+        })
 
 class SystemNotificationRuleViewSet(viewsets.ModelViewSet):
     """
